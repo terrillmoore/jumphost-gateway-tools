@@ -32,6 +32,7 @@ Useful scripts for managing gateways configured using [conduit-mfg](https://gith
    ttn-ithaca-00-08-00-4a-37-69 20017: 00:80:00:00:A0:00:1D:B2: ok
    ttn-ithaca-00-08-00-4a-37-6a 20019: 00:80:00:00:A0:00:1D:B3: ok
    ttn-ithaca-00-08-00-4a-37-71 20006: 00:80:00:00:A0:00:1D:AA: ok
+   $ 
    ```
 
    In the above, the packet forwarder for `ttn-ithaca-00-08-00-4a-2b-2b` has crashed, and is restarted. The packet forwarder of `ttn-ithaca-00-08-00-4a-37-6a` is discovered to have stopped, so it also is restarted.
