@@ -8,13 +8,13 @@ if [ ! -x "$PPATH/live-gateways.sh" ]; then
 fi
 
 "$PPATH/live-gateways.sh" |
-	while read id p ; do 
-		echo -n $id "$p: " 
+	while read id p ; do
+		echo -n $id "$p: "
 		ssh </dev/null -p $p root@localhost \
 			'EUI=`mts-io-sysfs show lora/eui`
 			if [ ! -f /var/run/lora-pkt-fwd.pid ]; then
 				DEAD="stopped"
-			elif kill -0 `cat /var/run/lora-pkt-fwd.pid` ; then 
+			elif kill -0 `cat /var/run/lora-pkt-fwd.pid` ; then
 				DEAD=
 			else
 				DEAD="crashed"
@@ -30,8 +30,8 @@ fi
 
 			if [ X"$DEAD" = X ]; then
 				echo "$EUI: ok"
-			else 
+			else
 				echo "$EUI: $DEAD, restarting"
 				/etc/init.d/ttn-pkt-forwarder restart
 			fi'
-	done 
+	done
