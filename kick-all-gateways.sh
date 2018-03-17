@@ -1,6 +1,13 @@
 #!/bin/bash
 
-./live-gateways.sh |  
+PPATH=$(dirname $0)
+
+if [ ! -x "$PPATH/live-gateways.sh" ]; then
+	echo "Can't find live-gateways.sh" 1>&2
+	exit 1
+fi
+
+"$PPATH/live-gateways.sh" |
 	while read id p ; do 
 		echo -n $id "$p: " 
 		ssh </dev/null -p $p root@localhost \
