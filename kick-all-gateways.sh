@@ -1,5 +1,13 @@
 #!/bin/bash
 
+#
+# Name: kick-all-gateways.sh
+#
+# Function:
+#	Scan all gateways, restarting if dead.
+#
+
+PNAME=$(basename $0)
 PPATH=$(dirname $0)
 
 if [ ! -x "$PPATH/live-gateways.sh" ]; then
@@ -7,6 +15,70 @@ if [ ! -x "$PPATH/live-gateways.sh" ]; then
 	exit 1
 fi
 
+# output to terminal, but only if verbose.
+function _verbose {
+	if [ $OPTVERBOSE -ne 0 ]; then
+		echo "$PNAME:" "$@" 1>&2
+	fi
+}
+
+# produce the help message.
+function _help {
+	more 1>&2 <<.
+
+Name:	$PNAME
+
+Function:
+	Check all running gateways.
+
+Usage:
+	$USAGE
+
+Switches:
+	-h		displays help (this message), and exits.
+
+	-v		talk about what we're doing.
+
+	-D		operate in debug mode.
+
+	-Q		query only, don't restart
+.
+}
+
+#### argument scanning:  usage ####
+USAGE="${PNAME} -[DfhQv]"
+
+OPTDEBUG=0
+OPTVERBOSE=0
+OPTQUERY=0
+
+NEXTBOOL=1
+while getopts DnQv c
+do
+	if [ $NEXTBOOL -eq -1 ]; then
+		NEXTBOOL=0
+	else
+		NEXTBOOL=1
+	fi
+
+	if [ $OPTDEBUG -ne 0 ]; then
+		echo "Scanning option -${c}" 1>&2
+	fi
+
+	case $c in
+	D)	OPTDEBUG=$NEXTBOOL;;
+	h)	_help
+		exit 0
+		;;
+	n)	NEXTBOOL=-1;;
+	Q)	OPTQUERY=$NEXTBOOL;;
+	v)	OPTVERBOSE=$NEXTBOOL;;
+	\?)	echo "$USAGE"
+		exit 1;;
+	esac
+done
+
+### do the work ###
 "$PPATH/live-gateways.sh" |
 	while read id p ; do
 		echo -n $id "$p: "
@@ -30,6 +102,8 @@ fi
 
 			if [ X"$DEAD" = X ]; then
 				echo "$EUI: ok"
+			elif [ $OPTQUERY -ne 0 ]; then
+				echo "$EUI: $DEAD"
 			else
 				echo "$EUI: $DEAD, restarting"
 				/etc/init.d/ttn-pkt-forwarder restart
