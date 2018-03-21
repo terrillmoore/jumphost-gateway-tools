@@ -46,14 +46,14 @@ Switches:
 }
 
 #### argument scanning:  usage ####
-USAGE="${PNAME} -[DfhQv]"
+USAGE="${PNAME} -[DhQv]"
 
 OPTDEBUG=0
 OPTVERBOSE=0
 OPTQUERY=0
 
 NEXTBOOL=1
-while getopts DnQv c
+while getopts DnhQv c
 do
 	if [ $NEXTBOOL -eq -1 ]; then
 		NEXTBOOL=0
