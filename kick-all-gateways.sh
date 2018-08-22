@@ -84,6 +84,8 @@ done
 		echo -n $id "$p: "
 		ssh </dev/null -p $p root@localhost \
 			'EUI=`mts-io-sysfs show lora/eui`
+			FSPCT=$(df -P /var/log/. | tail -1 | awk '\''{ print substr($5, 1, length($5)-1); }'\'')
+			OPTQUERY='"$OPTQUERY"'
 			if [ ! -f /var/run/lora-pkt-fwd.pid ]; then
 				DEAD="stopped"
 			elif kill -0 `cat /var/run/lora-pkt-fwd.pid` ; then
@@ -101,11 +103,21 @@ done
 			fi
 
 			if [ X"$DEAD" = X ]; then
-				echo "$EUI: ok"
+				# alert on file system percentage
+				if [ $FSPCT -gt 90 ]; then
+					DEAD="full"
+				fi
+			fi
+
+			if [ X"$DEAD" = X ]; then
+				echo "$EUI: ok (${FSPCT}%)"
 			elif [ $OPTQUERY -ne 0 ]; then
-				echo "$EUI: $DEAD"
+				echo "$EUI: $DEAD (${FSPCT}%)"
+			elif [ X"$DEAD" = Xhung -o X"$DEAD" = Xfull ]; then
+				echo "$EUI: $DEAD (${FSPCT}%), rebooting"
+				reboot
 			else
-				echo "$EUI: $DEAD, restarting"
+				echo "$EUI: $DEAD (${FSPCT}%), restarting"
 				/etc/init.d/ttn-pkt-forwarder restart
 			fi'
 	done
