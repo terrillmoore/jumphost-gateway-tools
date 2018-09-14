@@ -102,6 +102,18 @@ done
 				fi
 			fi
 
+			if [ X"$DEAD" = Xcrashed ]; then
+				# change DEAD to hung in case the
+				# router is just stopping immediately.
+				echo "... check whether we need to reboot"
+				if [ -f /var/log/lora-pkt-fwd.log ]; then
+					LASTLINE=$(tail -1 /var/log/lora-pkt-fwd.log)
+					if [ "$LASTLINE" = "ERROR: [main] failed to start the concentrator" ]; then
+						DEAD="concentrator"
+					fi
+				fi
+			fi
+
 			if [ X"$DEAD" = X ]; then
 				# alert on file system percentage
 				if [ $FSPCT -gt 90 ]; then
@@ -113,7 +125,7 @@ done
 				echo "$EUI: ok (${FSPCT}%)"
 			elif [ $OPTQUERY -ne 0 ]; then
 				echo "$EUI: $DEAD (${FSPCT}%)"
-			elif [ X"$DEAD" = Xhung -o X"$DEAD" = Xfull ]; then
+			elif [ X"$DEAD" = Xhung -o X"$DEAD" = Xfull -o X"$DEAD" = Xconcentrator ]; then
 				echo "$EUI: $DEAD (${FSPCT}%), rebooting"
 				reboot
 			else
