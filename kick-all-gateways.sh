@@ -129,7 +129,7 @@ function _kickgateway {
 
 		if [ X"$DEAD" = X ]; then
 			# alert on file system percentage
-			if [ $FSPCT -gt 90 ]; then
+			if [ $FSPCT -gt 75 ]; then
 				DEAD="full"
 			fi
 		fi
