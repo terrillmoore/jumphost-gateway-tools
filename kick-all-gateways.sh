@@ -49,18 +49,21 @@ Options:
 	-D		operate in debug mode.
 
 	-Q		query only, don't try to fix problems.
+
+	-r		always restart the packet forwarder (as a minimum)
 .
 }
 
 #### argument scanning:  usage ####
-USAGE="${PNAME} -[DhQv] [pattern ...]"
+USAGE="${PNAME} -[DhQrv] [pattern ...]"
 
 OPTDEBUG=0
 OPTVERBOSE=0
 OPTQUERY=0
+OPTRESTART=0
 
 NEXTBOOL=1
-while getopts DnhQv c
+while getopts DnhQrv c
 do
 	if [ $NEXTBOOL -eq -1 ]; then
 		NEXTBOOL=0
@@ -79,6 +82,7 @@ do
 		;;
 	n)	NEXTBOOL=-1;;
 	Q)	OPTQUERY=$NEXTBOOL;;
+	r)	OPTRESTART=$NEXTBOOL;;
 	v)	OPTVERBOSE=$NEXTBOOL;;
 	\?)	echo "$USAGE"
 		exit 1;;
@@ -99,6 +103,7 @@ function _kickgateway {
 		'EUI=`mts-io-sysfs show lora/eui`
 		FSPCT=$(df -P /var/log/. | tail -1 | awk '\''{ print substr($5, 1, length($5)-1); }'\'')
 		OPTQUERY='"$OPTQUERY"'
+		OPTRESTART='"$OPTRESTART"'
 		if [ ! -f /var/run/lora-pkt-fwd.pid ]; then
 			DEAD="stopped"
 		elif kill -0 `cat /var/run/lora-pkt-fwd.pid` ; then
@@ -136,15 +141,34 @@ function _kickgateway {
 
 		if [ X"$DEAD" = X ]; then
 			echo "$EUI: ok (${FSPCT}%)"
+			ACTION=none
+			if [ $OPTRESTART -ne 0 ]; then
+				ACTION=restart
+			fi
 		elif [ $OPTQUERY -ne 0 ]; then
 			echo "$EUI: $DEAD (${FSPCT}%)"
+			ACTION=none
 		elif [ X"$DEAD" = Xhung -o X"$DEAD" = Xfull -o X"$DEAD" = Xconcentrator ]; then
 			echo "$EUI: $DEAD (${FSPCT}%), rebooting"
-			reboot
+			ACTION=reboot
 		else
 			echo "$EUI: $DEAD (${FSPCT}%), restarting"
+			ACTION=restart
+		fi
+
+		case $ACTION in
+
+		reboot)
+			reboot
+			;;
+		restart)
 			/etc/init.d/ttn-pkt-forwarder restart
-		fi'
+			;;
+		none)
+			true
+			;;
+
+		esac'
 }
 
 function _genawkpgm {
