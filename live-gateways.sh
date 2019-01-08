@@ -11,7 +11,7 @@ trap 'rm -rf $TEMPDIR' EXIT
 
 export LC_ALL=C
 netstat -ln | 
-	grep '::1:200' | 
+	grep '::1:20[0-9][0-9][0-9]' | 
 	awk '{ print $4 }' | 
 	sed -e 's/::1://' | sort > $TEMPLOGGED &&
 	sort -t: +2 -3 /etc/passwd | 
