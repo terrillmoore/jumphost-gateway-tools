@@ -128,7 +128,6 @@ function _kickgateway {
 		if [ X"$DEAD" = Xcrashed ]; then
 			# change DEAD to "concentrator" in case the
 			# router is just stopping immediately.
-			echo "... check whether we need to reboot"
 			if [ -f /var/log/lora-pkt-fwd.log ]; then
 				LASTLINE=$(tail -1 /var/log/lora-pkt-fwd.log)
 				if [ "$LASTLINE" = "ERROR: [main] failed to start the concentrator" ]; then
