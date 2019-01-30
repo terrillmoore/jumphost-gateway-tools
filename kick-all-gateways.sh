@@ -57,12 +57,12 @@ Options:
 #### argument scanning:  usage ####
 USAGE="${PNAME} -[DhQrv] [pattern ...]"
 
-OPTDEBUG=0
-OPTVERBOSE=0
-OPTQUERY=0
-OPTRESTART=0
+typeset -i OPTDEBUG=0
+typeset -i OPTVERBOSE=0
+typeset -i OPTQUERY=0
+typeset -i OPTRESTART=0
 
-NEXTBOOL=1
+typeset -i NEXTBOOL=1
 while getopts DnhQrv c
 do
 	if [ $NEXTBOOL -eq -1 ]; then
