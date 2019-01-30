@@ -188,7 +188,7 @@ function _genawkpgm {
 		# shellcheck disable=2016 # the '$' below is not a substitution.
 		echo "$i" |
 		  sed -e 's;/;\\/;g' -e 's;.*;$1 ~ /&/ { print };'
-	done
+	done | LC_ALL=C sort -u
 }
 
 ### do the work ###
