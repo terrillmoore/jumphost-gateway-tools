@@ -35,7 +35,7 @@ Usage:
 	$USAGE
 
 Operation:
-	The arguments after the options are taken as egrep patterns, and
+	The arguments after the options are taken as awk patterns, and
 	are compared to the login names of gateways that are currently
 	attached. If any pattern matches, then the operation is applied
 	to the corresponding gateway. If no patterns are given, all gateways
@@ -121,7 +121,7 @@ function _kickgateway {
 		fi
 
 		if [ X"$DEAD" = Xcrashed ]; then
-			# change DEAD to hung in case the
+			# change DEAD to "concentrator" in case the
 			# router is just stopping immediately.
 			echo "... check whether we need to reboot"
 			if [ -f /var/log/lora-pkt-fwd.log ]; then
