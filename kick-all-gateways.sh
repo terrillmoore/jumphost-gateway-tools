@@ -111,7 +111,7 @@ function _kickgateway {
 		typeset -i OPTLISTNAME='"$OPTLISTNAME"'
 		if [ ! -f /var/run/lora-pkt-fwd.pid ]; then
 			DEAD="stopped"
-		elif kill -0 "$(cat /var/run/lora-pkt-fwd.pid)" ; then
+		elif kill -0 "$(cat /var/run/lora-pkt-fwd.pid)" 2>/dev/null ; then
 			DEAD=
 		else
 			DEAD="crashed"
