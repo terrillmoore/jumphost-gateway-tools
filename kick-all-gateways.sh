@@ -48,6 +48,8 @@ Options:
 
 	-D		operate in debug mode.
 
+	-L		list the descriptions of each gateway.
+
 	-Q		query only, don't try to fix problems.
 
 	-r		always restart the packet forwarder (as a minimum)
@@ -55,15 +57,16 @@ Options:
 }
 
 #### argument scanning:  usage ####
-USAGE="${PNAME} -[DhQrv] [pattern ...]"
+USAGE="${PNAME} -[DhLQrv] [pattern ...]"
 
 typeset -i OPTDEBUG=0
 typeset -i OPTVERBOSE=0
 typeset -i OPTQUERY=0
 typeset -i OPTRESTART=0
+typeset -i OPTLISTNAME=0
 
 typeset -i NEXTBOOL=1
-while getopts DnhQrv c
+while getopts DnhLQrv c
 do
 	if [ $NEXTBOOL -eq -1 ]; then
 		NEXTBOOL=0
@@ -80,6 +83,7 @@ do
 	h)	_help
 		exit 0
 		;;
+	L)	OPTLISTNAME=$NEXTBOOL;;
 	n)	NEXTBOOL=-1;;
 	Q)	OPTQUERY=$NEXTBOOL;;
 	r)	OPTRESTART=$NEXTBOOL;;
@@ -104,6 +108,7 @@ function _kickgateway {
 		FSPCT=$(df -P /var/log/. | tail -1 | awk '\''{ print substr($5, 1, length($5)-1); }'\'')
 		OPTQUERY='"$OPTQUERY"'
 		OPTRESTART='"$OPTRESTART"'
+		typeset -i OPTLISTNAME='"$OPTLISTNAME"'
 		if [ ! -f /var/run/lora-pkt-fwd.pid ]; then
 			DEAD="stopped"
 		elif kill -0 "$(cat /var/run/lora-pkt-fwd.pid)" ; then
@@ -139,20 +144,26 @@ function _kickgateway {
 			fi
 		fi
 
+		echo -n "$EUI: "
+		if [[ $OPTLISTNAME -ne 0 ]]; then
+			DESC=$(grep '\''"description"'\'': /var/config/lora/local_conf.json | cut -d '\''"'\'' -f 4)
+			echo -n "$DESC: "
+		fi
+
 		if [ X"$DEAD" = X ]; then
-			echo "$EUI: ok (${FSPCT}%)"
+			echo "ok (${FSPCT}%)"
 			ACTION=none
 			if [ $OPTRESTART -ne 0 ]; then
 				ACTION=restart
 			fi
 		elif [ $OPTQUERY -ne 0 ]; then
-			echo "$EUI: $DEAD (${FSPCT}%)"
+			echo "$DEAD (${FSPCT}%)"
 			ACTION=none
 		elif [ X"$DEAD" = Xhung -o X"$DEAD" = Xfull -o X"$DEAD" = Xconcentrator ]; then
-			echo "$EUI: $DEAD (${FSPCT}%), rebooting"
+			echo "$DEAD (${FSPCT}%), rebooting"
 			ACTION=reboot
 		else
-			echo "$EUI: $DEAD (${FSPCT}%), restarting"
+			echo "$DEAD (${FSPCT}%), restarting"
 			ACTION=restart
 		fi
 
