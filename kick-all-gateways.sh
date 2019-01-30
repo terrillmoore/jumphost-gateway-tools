@@ -7,8 +7,8 @@
 #	Scan all gateways, restarting if dead.
 #
 
-PNAME=$(basename $0)
-PPATH=$(dirname $0)
+PNAME="$(basename "$0")"
+PPATH="$(dirname "$0")"
 
 if [ ! -x "$PPATH/live-gateways.sh" ]; then
 	echo "Can't find live-gateways.sh" 1>&2
@@ -17,7 +17,7 @@ fi
 
 # output to terminal, but only if verbose.
 function _verbose {
-	if [ $OPTVERBOSE -ne 0 ]; then
+	if [[ $OPTVERBOSE -ne 0 ]]; then
 		echo "$PNAME:" "$@" 1>&2
 	fi
 }
@@ -90,7 +90,7 @@ do
 done
 
 #### get rid of scanned options ####
-shift	`expr $OPTIND - 1`
+shift $((OPTIND - 1))
 
 ### _kickgateway {id} {port}
 ### kick the gateway on the specified port according
@@ -98,15 +98,15 @@ shift	`expr $OPTIND - 1`
 function _kickgateway {
 	local -r id="$1"
 	local -r p="$2"
-	echo -n $id "$p: "
-	ssh </dev/null -p $p root@localhost \
+	echo -n "$id" "$p: "
+	ssh </dev/null -p "$p" root@localhost \
 		'EUI=`mts-io-sysfs show lora/eui`
 		FSPCT=$(df -P /var/log/. | tail -1 | awk '\''{ print substr($5, 1, length($5)-1); }'\'')
 		OPTQUERY='"$OPTQUERY"'
 		OPTRESTART='"$OPTRESTART"'
 		if [ ! -f /var/run/lora-pkt-fwd.pid ]; then
 			DEAD="stopped"
-		elif kill -0 `cat /var/run/lora-pkt-fwd.pid` ; then
+		elif kill -0 "$(cat /var/run/lora-pkt-fwd.pid)" ; then
 			DEAD=
 		else
 			DEAD="crashed"
@@ -171,8 +171,11 @@ function _kickgateway {
 		esac'
 }
 
+# generate an awk program that matches any of the patterns given
+# as arguments, one pattern per word.
 function _genawkpgm {
 	for i in "$@" ; do
+		# shellcheck disable=2016 # the '$' below is not a substitution.
 		echo "$i" |
 		  sed -e 's;/;\\/;g' -e 's;.*;$1 ~ /&/ { print };'
 	done
@@ -180,15 +183,17 @@ function _genawkpgm {
 
 ### do the work ###
 if [ $# -eq 0 ]; then
+	# hit all the gateways
 	"$PPATH/live-gateways.sh" |
-		while read id p ; do
+		while read -r id p ; do
 			_kickgateway "$id" "$p"
 		done
 else
-	AWKPROGRAM=$(printf '$1 ~ "%s" { print }')
+	# the parameters are awk patterns; any gateway that matches
+	# any pattern will be handed to _kickgateway.
 	"$PPATH/live-gateways.sh" |
 		awk "$(_genawkpgm "$@")" |
-		while read id p ; do
+		while read -r id p ; do
 			_kickgateway "$id" "$p"
 		done
 fi
