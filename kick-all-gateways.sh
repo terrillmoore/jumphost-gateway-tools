@@ -53,20 +53,26 @@ Options:
 	-Q		query only, don't try to fix problems.
 
 	-r		always restart the packet forwarder (as a minimum)
+
+	-s		display stats
+
+	-f {sep}	separator string between fields, default ': '.
 .
 }
 
 #### argument scanning:  usage ####
-USAGE="${PNAME} -[DhLQrv] [pattern ...]"
+USAGE="${PNAME} -[DhLQrsv f*] [pattern ...]"
 
 typeset -i OPTDEBUG=0
 typeset -i OPTVERBOSE=0
 typeset -i OPTQUERY=0
 typeset -i OPTRESTART=0
+typeset -i OPTSTATS=0
 typeset -i OPTLISTNAME=0
+OPTSEP=": "
 
 typeset -i NEXTBOOL=1
-while getopts DnhLQrv c
+while getopts Df:nhLQrsv c
 do
 	if [ $NEXTBOOL -eq -1 ]; then
 		NEXTBOOL=0
@@ -80,6 +86,7 @@ do
 
 	case $c in
 	D)	OPTDEBUG=$NEXTBOOL;;
+	f)	OPTSEP="$OPTARG";;
 	h)	_help
 		exit 0
 		;;
@@ -87,6 +94,7 @@ do
 	n)	NEXTBOOL=-1;;
 	Q)	OPTQUERY=$NEXTBOOL;;
 	r)	OPTRESTART=$NEXTBOOL;;
+	s)	OPTSTATS=$NEXTBOOL;;
 	v)	OPTVERBOSE=$NEXTBOOL;;
 	\?)	echo "$USAGE"
 		exit 1;;
@@ -102,13 +110,27 @@ shift $((OPTIND - 1))
 function _kickgateway {
 	local -r id="$1"
 	local -r p="$2"
-	echo -n "$id" "$p: "
-	ssh </dev/null -p "$p" root@localhost \
+	printf "%s" "$id${OPTSEP}$p${OPTSEP}"
+	ssh </dev/null -o BatchMode=yes -p "$p" root@localhost \
 		'EUI=`mts-io-sysfs show lora/eui`
 		FSPCT=$(df -P /var/log/. | tail -1 | awk '\''{ print substr($5, 1, length($5)-1); }'\'')
+		MLINUX="$(head -1 /etc/mlinux-version)"
 		OPTQUERY='"$OPTQUERY"'
 		OPTRESTART='"$OPTRESTART"'
+		OPTSEP='"${OPTSEP}"'
+		OPTSEP="${OPTSEP%.}"
+		typeset -i OPTSTATS='"$OPTSTATS"'
 		typeset -i OPTLISTNAME='"$OPTLISTNAME"'
+		
+		# get network bytes / day * 31 -- worst case monthly charge
+		if [ $OPTSTATS -ne 0 ]; then
+			STATS=$(ifconfig eth0 | awk '\''
+				BEGIN { getline < "/proc/uptime" ; updays = $1 / 86400 }
+				/RX bytes:/ { print(updays, (substr($2,7) + substr($6,7)) / updays * 31 / 1e6) }'\'')
+			printf "%s days${OPTSEP}%s MB/mo${OPTSEP}" ${STATS}
+		fi
+
+		# get gateway status
 		if [ ! -f /var/run/lora-pkt-fwd.pid ]; then
 			DEAD="stopped"
 		elif kill -0 "$(cat /var/run/lora-pkt-fwd.pid)" 2>/dev/null ; then
@@ -143,10 +165,11 @@ function _kickgateway {
 			fi
 		fi
 
-		echo -n "$EUI: "
+		printf "%s" "$EUI${OPTSEP}"
+		printf "%s%s" "$MLINUX" "$OPTSEP"
 		if [[ $OPTLISTNAME -ne 0 ]]; then
 			DESC=$(grep '\''"description"'\'': /var/config/lora/local_conf.json | cut -d '\''"'\'' -f 4)
-			echo -n "$DESC: "
+			printf "%s" "$DESC${OPTSEP}"
 		fi
 
 		if [ X"$DEAD" = X ]; then
