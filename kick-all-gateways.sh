@@ -117,8 +117,7 @@ function _kickgateway {
 		MLINUX="$(head -1 /etc/mlinux-version)"
 		OPTQUERY='"$OPTQUERY"'
 		OPTRESTART='"$OPTRESTART"'
-		OPTSEP='"${OPTSEP}"'
-		OPTSEP="${OPTSEP%.}"
+		OPTSEP="'"${OPTSEP}"'"
 		typeset -i OPTSTATS='"$OPTSTATS"'
 		typeset -i OPTLISTNAME='"$OPTLISTNAME"'
 		
