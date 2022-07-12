@@ -48,13 +48,15 @@ Options:
 
 	-D		operate in debug mode.
 
+	-B		force a reboot problem on all matching gateways.
+
 	-L		list the descriptions of each gateway.
 
 	-Q		query only, don't try to fix problems.
 
 	-r		always restart the packet forwarder (as a minimum)
 
-	-R		reboot the gateway (as a minimum)
+	-R		reboot the gateway (as a minimum if any problems are seen)
 
 	-s		display stats
 
@@ -63,10 +65,11 @@ Options:
 }
 
 #### argument scanning:  usage ####
-USAGE="${PNAME} -[DhLQRrsv f*] [pattern ...]"
+USAGE="${PNAME} -[DhBLQRrsv f*] [pattern ...]"
 
 typeset -i OPTDEBUG=0
 typeset -i OPTVERBOSE=0
+typeset -i OPTBOOT=0
 typeset -i OPTQUERY=0
 typeset -i OPTRESTART=0
 typeset -i OPTREBOOT=0
@@ -75,7 +78,7 @@ typeset -i OPTLISTNAME=0
 OPTSEP=": "
 
 typeset -i NEXTBOOL=1
-while getopts Df:nhLQrRsv c
+while getopts Df:nBhLQrRsv c
 do
 	if [ $NEXTBOOL -eq -1 ]; then
 		NEXTBOOL=0
@@ -90,6 +93,7 @@ do
 	case $c in
 	D)	OPTDEBUG=$NEXTBOOL;;
 	f)	OPTSEP="$OPTARG";;
+	B)	OPTBOOT=$NEXTBOOL;;
 	h)	_help
 		exit 0
 		;;
@@ -120,6 +124,7 @@ function _kickgateway {
 		FSPCT=$(df -P /var/log/. | tail -1 | awk '\''{ print substr($5, 1, length($5)-1); }'\'')
 		MLINUX="$(head -1 /etc/mlinux-version)"
 		OPTQUERY='"$OPTQUERY"'
+		OPTBOOT='"$OPTBOOT"'
 		OPTRESTART='"$OPTRESTART"'
 		OPTREBOOT='"$OPTREBOOT"'
 		OPTSEP="'"${OPTSEP}"'"
@@ -169,6 +174,12 @@ function _kickgateway {
 			fi
 		fi
 
+		if [ $OPTBOOT -ne 0 ]; then
+			if [ X"$DEAD" = X ]; then
+				DEAD="reboot-requested"
+			fi
+		fi
+
 		printf "%s" "$EUI${OPTSEP}"
 		printf "%s%s" "$MLINUX" "$OPTSEP"
 		if [[ $OPTLISTNAME -ne 0 ]]; then
@@ -187,7 +198,7 @@ function _kickgateway {
 		elif [ $OPTQUERY -ne 0 ]; then
 			echo "$DEAD (${FSPCT}%)"
 			ACTION=none
-		elif [ X"$DEAD" = Xhung ] || [ X"$DEAD" = Xfull ] || [ X"$DEAD" = Xconcentrator ] || [ $OPTREBOOT -ne 0 ]; then
+		elif [ X"$DEAD" = Xhung ] || [ X"$DEAD" = Xfull ] || [ X"$DEAD" = Xconcentrator ] || [ $OPTREBOOT -ne 0 ] || [ $OPTBOOT -ne 0 ]; then
 			echo "$DEAD (${FSPCT}%), rebooting"
 			ACTION=reboot
 		else
