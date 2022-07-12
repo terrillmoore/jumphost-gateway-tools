@@ -54,6 +54,8 @@ Options:
 
 	-r		always restart the packet forwarder (as a minimum)
 
+	-R		reboot the gateway (as a minimum)
+
 	-s		display stats
 
 	-f {sep}	separator string between fields, default ': '.
@@ -61,18 +63,19 @@ Options:
 }
 
 #### argument scanning:  usage ####
-USAGE="${PNAME} -[DhLQrsv f*] [pattern ...]"
+USAGE="${PNAME} -[DhLQRrsv f*] [pattern ...]"
 
 typeset -i OPTDEBUG=0
 typeset -i OPTVERBOSE=0
 typeset -i OPTQUERY=0
 typeset -i OPTRESTART=0
+typeset -i OPTREBOOT=0
 typeset -i OPTSTATS=0
 typeset -i OPTLISTNAME=0
 OPTSEP=": "
 
 typeset -i NEXTBOOL=1
-while getopts Df:nhLQrsv c
+while getopts Df:nhLQrRsv c
 do
 	if [ $NEXTBOOL -eq -1 ]; then
 		NEXTBOOL=0
@@ -94,6 +97,7 @@ do
 	n)	NEXTBOOL=-1;;
 	Q)	OPTQUERY=$NEXTBOOL;;
 	r)	OPTRESTART=$NEXTBOOL;;
+	R)	OPTREBOOT=$NEXTBOOL;;
 	s)	OPTSTATS=$NEXTBOOL;;
 	v)	OPTVERBOSE=$NEXTBOOL;;
 	\?)	echo "$USAGE"
@@ -117,6 +121,7 @@ function _kickgateway {
 		MLINUX="$(head -1 /etc/mlinux-version)"
 		OPTQUERY='"$OPTQUERY"'
 		OPTRESTART='"$OPTRESTART"'
+		OPTREBOOT='"$OPTREBOOT"'
 		OPTSEP="'"${OPTSEP}"'"
 		typeset -i OPTSTATS='"$OPTSTATS"'
 		typeset -i OPTLISTNAME='"$OPTLISTNAME"'
@@ -174,13 +179,15 @@ function _kickgateway {
 		if [ X"$DEAD" = X ]; then
 			echo "ok (${FSPCT}%)"
 			ACTION=none
-			if [ $OPTRESTART -ne 0 ]; then
+			if [ $OPTREBOOT -ne 0 ]; then
+				ACTION=reboot
+			elif [ $OPTRESTART -ne 0 ]; then
 				ACTION=restart
 			fi
 		elif [ $OPTQUERY -ne 0 ]; then
 			echo "$DEAD (${FSPCT}%)"
 			ACTION=none
-		elif [ X"$DEAD" = Xhung -o X"$DEAD" = Xfull -o X"$DEAD" = Xconcentrator ]; then
+		elif [ X"$DEAD" = Xhung ] || [ X"$DEAD" = Xfull ] || [ X"$DEAD" = Xconcentrator ] || [ $OPTREBOOT -ne 0 ]; then
 			echo "$DEAD (${FSPCT}%), rebooting"
 			ACTION=reboot
 		else
