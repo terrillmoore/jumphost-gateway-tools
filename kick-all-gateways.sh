@@ -313,13 +313,17 @@ function _kickgateway {
 }
 
 # generate an awk program that matches any of the patterns given
-# as arguments, one pattern per word.
+# as arguments, one pattern per word. All patterns go in one rule,
+# so a login that matches several is printed once.
 function _genawkpgm {
+	local sep=""
+	local i
 	for i in "$@" ; do
 		# shellcheck disable=2016 # the '$' below is not a substitution.
-		echo "$i" |
-		  sed -e 's;/;\\/;g' -e 's;.*;$1 ~ /&/ { print };'
-	done | LC_ALL=C sort -u
+		printf '%s$1 ~ /%s/' "$sep" "$(printf '%s\n' "$i" | sed -e 's;/;\\/;g')"
+		sep=" || "
+	done
+	printf ' { print }\n'
 }
 
 ### do the work ###
