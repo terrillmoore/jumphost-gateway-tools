@@ -4,7 +4,7 @@ Useful scripts for managing gateways configured using [conduit-mfg](https://gith
 
 * `live-gateways.sh` displays a list of the gateways currently connected to the jumphost. Example:
    ```console
-   $ ./live-gatewways.sh
+   $ ./live-gateways.sh
    ttn-ithaca-00-08-00-4a-2b-2b	20008
    ttn-ithaca-00-08-00-4a-37-69	20017
    ttn-ithaca-00-08-00-4a-37-6a	20019

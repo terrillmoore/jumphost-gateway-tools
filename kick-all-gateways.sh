@@ -48,15 +48,19 @@ Options:
 
 	-D		operate in debug mode.
 
-	-B		force a reboot problem on all matching gateways.
+	-B		reboot all matching gateways. With -Q, report
+			healthy gateways as "reboot-requested" and
+			take no action.
 
 	-L		list the descriptions of each gateway.
 
-	-Q		query only, don't try to fix problems.
+	-Q		query only; take no action, even with -B, -r
+			or -R.
 
-	-r		always restart the packet forwarder (as a minimum)
+	-r		restart the forwarder even if it is healthy. A
+			fault that needs a reboot still reboots.
 
-	-R		reboot the gateway (as a minimum if any problems are seen)
+	-R		reboot every matching gateway, healthy or not.
 
 	-s		display stats
 
@@ -118,6 +122,10 @@ shift $((OPTIND - 1))
 function _kickgateway {
 	local -r id="$1"
 	local -r p="$2"
+	# OPTSEP quoted for the remote shell, so any separator is
+	# passed as data.
+	local qsep
+	printf -v qsep '%q' "$OPTSEP"
 	printf "%s" "$id${OPTSEP}$p${OPTSEP}"
 	ssh </dev/null -o BatchMode=yes -o StrictHostKeyChecking=no -p "$p" root@localhost \
 		'EUI=`mts-io-sysfs show lora/eui`
@@ -127,7 +135,7 @@ function _kickgateway {
 		OPTBOOT='"$OPTBOOT"'
 		OPTRESTART='"$OPTRESTART"'
 		OPTREBOOT='"$OPTREBOOT"'
-		OPTSEP="'"${OPTSEP}"'"
+		OPTSEP='"${qsep}"'
 		typeset -i OPTSTATS='"$OPTSTATS"'
 		typeset -i OPTLISTNAME='"$OPTLISTNAME"'
 	
@@ -189,12 +197,14 @@ function _kickgateway {
 			STATS=$(ifconfig eth0 | awk '\''
 				BEGIN { getline < "/proc/uptime" ; updays = $1 / 86400 }
 				/RX bytes:/ { print(updays, (substr($2,7) + substr($6,7)) / updays * 31 / 1e6) }'\'')
-			printf "%s days${OPTSEP}%s MB/mo${OPTSEP}" ${STATS}
+			set -- ${STATS}
+			printf "%s days%s%s MB/mo%s" "$1" "$OPTSEP" "$2" "$OPTSEP"
 		fi
 
-		# get gateway status
+		# get gateway status. With no transport there is no
+		# pid or log file to check.
 		if [ "$LORA_TRANSPORT" = "unknown" ]; then
-			DEAD=
+			DEAD="unknown-transport"
 		elif [ ! -f "$PIDFILE" ]; then
 			DEAD="stopped"
 		elif kill -0 "$(cat "$PIDFILE")" 2>/dev/null ; then
@@ -203,7 +213,7 @@ function _kickgateway {
 			DEAD="crashed"
 		fi
 
-		if [[ X"$DEAD" = X ]] && [ "$LORA_TRANSPORT" != "unknown" ]; then
+		if [ X"$DEAD" = X ]; then
 			# set X non-empty if file is more than 10 minutes old
 			X=$(find "$LOGFILE" -mmin +10)
 			if [ X"$X" != X ]; then
@@ -224,8 +234,9 @@ function _kickgateway {
 			fi
 		fi
 
-		if [ X"$DEAD" = X ]; then
-			# alert on file system percentage
+		if [ X"$DEAD" = X ] || [ X"$DEAD" = Xunknown-transport ]; then
+			# alert on file system percentage; a full disk
+			# needs a reboot whatever the transport.
 			if [ $FSPCT -gt 75 ]; then
 				DEAD="full"
 			fi
@@ -258,16 +269,31 @@ function _kickgateway {
 		fi
 
 		if [ X"$DEAD" = X ]; then
-			echo "ok (${FSPCT}%)"
 			ACTION=none
-			if [ $OPTREBOOT -ne 0 ]; then
+			if [ $OPTQUERY -ne 0 ]; then
+				echo "ok (${FSPCT}%)"
+			elif [ $OPTREBOOT -ne 0 ]; then
+				echo "ok (${FSPCT}%), rebooting"
 				ACTION=reboot
 			elif [ $OPTRESTART -ne 0 ]; then
+				echo "ok (${FSPCT}%), restarting"
 				ACTION=restart
+			else
+				echo "ok (${FSPCT}%)"
 			fi
 		elif [ $OPTQUERY -ne 0 ]; then
 			echo "$DEAD (${FSPCT}%)"
 			ACTION=none
+		elif [ X"$DEAD" = Xunknown-transport ]; then
+			# no automatic fix; a reboot needs no transport,
+			# so honor an explicit -R or -B.
+			if [ $OPTREBOOT -ne 0 ] || [ $OPTBOOT -ne 0 ]; then
+				echo "$DEAD (${FSPCT}%), rebooting"
+				ACTION=reboot
+			else
+				echo "$DEAD (${FSPCT}%)"
+				ACTION=none
+			fi
 		elif [ X"$DEAD" = Xhung ] || [ X"$DEAD" = Xfull ] || [ X"$DEAD" = Xconcentrator ] || [ $OPTREBOOT -ne 0 ] || [ $OPTBOOT -ne 0 ]; then
 			echo "$DEAD (${FSPCT}%), rebooting"
 			ACTION=reboot
@@ -282,11 +308,7 @@ function _kickgateway {
 			reboot
 			;;
 		restart)
-			if [ "$LORA_TRANSPORT" = "unknown" ]; then
-				printf "transport unknown, unable to restart: %s" "$LORA_TRANSPORT"
-			else
-				"$INITSCRIPT" restart
-			fi
+			"$INITSCRIPT" restart
 			;;
 		none)
 			true
@@ -296,13 +318,17 @@ function _kickgateway {
 }
 
 # generate an awk program that matches any of the patterns given
-# as arguments, one pattern per word.
+# as arguments, one pattern per word. All patterns go in one rule,
+# so a login that matches several is printed once.
 function _genawkpgm {
+	local sep=""
+	local i
 	for i in "$@" ; do
 		# shellcheck disable=2016 # the '$' below is not a substitution.
-		echo "$i" |
-		  sed -e 's;/;\\/;g' -e 's;.*;$1 ~ /&/ { print };'
-	done | LC_ALL=C sort -u
+		printf '%s$1 ~ /%s/' "$sep" "$(printf '%s\n' "$i" | sed -e 's;/;\\/;g')"
+		sep=" || "
+	done
+	printf ' { print }\n'
 }
 
 ### do the work ###
