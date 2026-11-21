@@ -48,7 +48,9 @@ Options:
 
 	-D		operate in debug mode.
 
-	-B		force a reboot problem on all matching gateways.
+	-B		reboot all matching gateways. With -Q, report
+			healthy gateways as "reboot-requested" and
+			take no action.
 
 	-L		list the descriptions of each gateway.
 
