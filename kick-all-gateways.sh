@@ -295,11 +295,7 @@ function _kickgateway {
 			reboot
 			;;
 		restart)
-			if [ "$LORA_TRANSPORT" = "unknown" ]; then
-				printf "transport unknown, unable to restart: %s" "$LORA_TRANSPORT"
-			else
-				"$INITSCRIPT" restart
-			fi
+			"$INITSCRIPT" restart
 			;;
 		none)
 			true
