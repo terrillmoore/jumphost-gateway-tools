@@ -50,9 +50,10 @@ The script then reports status:
 - A log file older than 10 minutes means `hung`.
 - On the packet forwarder only, a last log line of
   `ERROR: [main] failed to start the concentrator` turns `crashed` into `concentrator`.
-- `/var/log` usage over 75% means `full`.
-- With an unknown transport, the script skips the checks above and reports
-  `unknown-transport`. It takes no action unless `-R` or `-B` asks for a reboot.
+- With an unknown transport, the script skips the forwarder checks above and
+  reports `unknown-transport`. It takes no action unless `-R` or `-B` asks for
+  a reboot.
+- `/var/log` usage over 75% means `full`, whatever the transport.
 
 `hung`, `full`, `concentrator`, `-R` and `-B` lead to `reboot`; other faults
 run the init script's `restart`. `-Q` reports without acting.

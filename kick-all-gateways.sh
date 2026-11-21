@@ -227,8 +227,9 @@ function _kickgateway {
 			fi
 		fi
 
-		if [ X"$DEAD" = X ]; then
-			# alert on file system percentage
+		if [ X"$DEAD" = X ] || [ X"$DEAD" = Xunknown-transport ]; then
+			# alert on file system percentage; a full disk
+			# needs a reboot whatever the transport.
 			if [ $FSPCT -gt 75 ]; then
 				DEAD="full"
 			fi
