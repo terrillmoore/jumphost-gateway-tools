@@ -131,15 +131,58 @@ function _kickgateway {
 		typeset -i OPTSTATS='"$OPTSTATS"'
 		typeset -i OPTLISTNAME='"$OPTLISTNAME"'
 	
-		# guess whether this gateway is using basic station or semtech.
-		if [ -f "/etc/rc6.d/K30lora-basic-station" ]; then
-			LORA_TRANSPORT="basic_station"
-		elif [ -f "/etc/rc6.d/K30ttn-pkt-forwarder" ]; then
-			LORA_TRANSPORT="packet_forwarder"
-		else
-			LORA_TRANSPORT="unknown"
-		fi
+		# gwinfo {key}: print the string value of gateway_conf.{key}
+		# from gateway_info.json, written by ttn-multitech-cm with
+		# one key per line. Undoes the \" and \\ escapes; leaves
+		# \uXXXX as is. Prints nothing if the file or key is missing.
+		GWINFO=/var/config/lora/gateway_info.json
+		gwinfo() {
+			[ -f $GWINFO ] || return 0
+			sed -n -e "s/^ *\"$1\": \"\(.*\)\",*\$/\1/p" $GWINFO |
+				sed -e "s/\\\\\"/\"/g" -e "s/\\\\\\\\/\\\\/g"
+		}
+
+		# find the transport from gateway_info.json; without it,
+		# guess from the rc6.d kill scripts.
+		case "$(gwinfo transport)" in
+			"basic")
+				LORA_TRANSPORT="basic_station"
+				;;
+			"mp")
+				LORA_TRANSPORT="packet_forwarder"
+				;;
+			"")
+				if [ -f "/etc/rc6.d/K30lora-basic-station" ]; then
+					LORA_TRANSPORT="basic_station"
+				elif [ -f "/etc/rc6.d/K30ttn-pkt-forwarder" ]; then
+					LORA_TRANSPORT="packet_forwarder"
+				else
+					LORA_TRANSPORT="unknown"
+				fi
+				;;
+			*)
+				LORA_TRANSPORT="unknown"
+				;;
+		esac
 		typeset -r LORA_TRANSPORT
+
+		# forwarder files: from gateway_info.json, else the defaults
+		# for the transport.
+		PIDFILE=$(gwinfo pidfile)
+		LOGFILE=$(gwinfo logfile)
+		INITSCRIPT=$(gwinfo initscript)
+		case "$LORA_TRANSPORT" in
+			"packet_forwarder")
+				: ${PIDFILE:=/var/run/lora-pkt-fwd.pid}
+				: ${LOGFILE:=/var/log/lora-pkt-fwd.log}
+				: ${INITSCRIPT:=/etc/init.d/ttn-pkt-forwarder}
+				;;
+			"basic_station")
+				: ${PIDFILE:=/var/run/lora/station.pid}
+				: ${LOGFILE:=/var/log/basic-station.log}
+				: ${INITSCRIPT:=/etc/init.d/lora-basic-station}
+				;;
+		esac
 
 		# get network bytes / day * 31 -- worst case monthly charge
 		if [ $OPTSTATS -ne 0 ]; then
@@ -150,56 +193,30 @@ function _kickgateway {
 		fi
 
 		# get gateway status
-		case "$LORA_TRANSPORT" in
-			"packet_forwarder")
-				if [ ! -f /var/run/lora-pkt-fwd.pid ]; then
-					DEAD="stopped"
-				elif kill -0 "$(cat /var/run/lora-pkt-fwd.pid)" 2>/dev/null ; then
-					DEAD=
-				else
-					DEAD="crashed"
-				fi
-				;;
-			"basic_station")
-				if [ -f /var/run/lora/station.pid ]; then
-					if kill -0 "$(cat /var/run/lora/station.pid)" 2>/dev/null ; then
-						DEAD=
-					else
-						DEAD="crashed"
-					fi
-				else	
-					DEAD="stopped"
-				fi
-				;;
-			*)
-				DEAD=
-				;;
-		esac
+		if [ "$LORA_TRANSPORT" = "unknown" ]; then
+			DEAD=
+		elif [ ! -f "$PIDFILE" ]; then
+			DEAD="stopped"
+		elif kill -0 "$(cat "$PIDFILE")" 2>/dev/null ; then
+			DEAD=
+		else
+			DEAD="crashed"
+		fi
 
-		if [[ X"$DEAD" = X ]]; then
-			case "$LORA_TRANSPORT" in
-				"packet_forwarder")
-					# set X non-empty if file is more than 10 minutes old
-					X=$(find /var/log/lora-pkt-fwd.log -mmin +10)
-					if [ X"$X" != X ]; then
-						DEAD="hung"
-					fi
-					;;
-				"basic_station")
-					X=$(find /var/log/basic-station.log -mmin +10)
-					if [[ X"$X" != X ]]; then
-						DEAD="hung"
-					fi
-					;;
-			esac
+		if [[ X"$DEAD" = X ]] && [ "$LORA_TRANSPORT" != "unknown" ]; then
+			# set X non-empty if file is more than 10 minutes old
+			X=$(find "$LOGFILE" -mmin +10)
+			if [ X"$X" != X ]; then
+				DEAD="hung"
+			fi
 		fi
 
 		if [ X"$DEAD" = Xcrashed ]; then
 			if [[ "$LORA_TRANSPORT" = "packet_forwarder" ]]; then
 				# change DEAD to "concentrator" in case the
 				# router is just stopping immediately.
-				if [ -f /var/log/lora-pkt-fwd.log ]; then
-					LASTLINE=$(tail -1 /var/log/lora-pkt-fwd.log)
+				if [ -f "$LOGFILE" ]; then
+					LASTLINE=$(tail -1 "$LOGFILE")
 					if [ "$LASTLINE" = "ERROR: [main] failed to start the concentrator" ]; then
 						DEAD="concentrator"
 					fi
@@ -223,17 +240,20 @@ function _kickgateway {
 		printf "%s" "$EUI${OPTSEP}"
 		printf "%s%s" "$MLINUX" "$OPTSEP"
 		if [[ $OPTLISTNAME -ne 0 ]]; then
-			case "$LORA_TRANSPORT" in
-				"packet_forwarder")
-					DESC=$(grep '\''"description"'\'': /var/config/lora/local_conf.json | cut -d '\''"'\'' -f 4)
-					;;
-				"basic_station")
-					DESC="unknown (Basic Station)"
-					;;
-				*)
-					DESC="unknown (misconfig)"
-					;;
-			esac
+			DESC=$(gwinfo description)
+			if [ -z "$DESC" ]; then
+				case "$LORA_TRANSPORT" in
+					"packet_forwarder")
+						DESC=$(grep '\''"description"'\'': /var/config/lora/local_conf.json | cut -d '\''"'\'' -f 4)
+						;;
+					"basic_station")
+						DESC="unknown (Basic Station)"
+						;;
+					*)
+						DESC="unknown (misconfig)"
+						;;
+				esac
+			fi
 			printf "%s" "$DESC${OPTSEP}"
 		fi
 
@@ -262,17 +282,11 @@ function _kickgateway {
 			reboot
 			;;
 		restart)
-			case $LORA_TRANSPORT in
-				"packet_forwarder")	
-					/etc/init.d/ttn-pkt-forwarder restart
-					;;
-				"basic_station")
-					/etc/init.d/lora-basic-station restart
-					;;
-				*)
-					printf "transport unknown, unable to restart: %s" "$LORA_TRANSPORT"
-					;;
-			esac
+			if [ "$LORA_TRANSPORT" = "unknown" ]; then
+				printf "transport unknown, unable to restart: %s" "$LORA_TRANSPORT"
+			else
+				"$INITSCRIPT" restart
+			fi
 			;;
 		none)
 			true
