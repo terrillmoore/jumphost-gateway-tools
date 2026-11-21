@@ -51,8 +51,8 @@ The script then reports status:
 - On the packet forwarder only, a last log line of
   `ERROR: [main] failed to start the concentrator` turns `crashed` into `concentrator`.
 - `/var/log` usage over 75% means `full`.
-- With an unknown transport, the script skips these checks and cannot restart
-  the forwarder.
+- With an unknown transport, the script skips the checks above and reports
+  `unknown-transport`. It takes no action unless `-R` or `-B` asks for a reboot.
 
 `hung`, `full`, `concentrator`, `-R` and `-B` lead to `reboot`; other faults
 run the init script's `restart`. `-Q` reports without acting.

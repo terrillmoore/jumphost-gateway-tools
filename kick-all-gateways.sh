@@ -194,9 +194,10 @@ function _kickgateway {
 			printf "%s days${OPTSEP}%s MB/mo${OPTSEP}" ${STATS}
 		fi
 
-		# get gateway status
+		# get gateway status. With no transport there is no
+		# pid or log file to check.
 		if [ "$LORA_TRANSPORT" = "unknown" ]; then
-			DEAD=
+			DEAD="unknown-transport"
 		elif [ ! -f "$PIDFILE" ]; then
 			DEAD="stopped"
 		elif kill -0 "$(cat "$PIDFILE")" 2>/dev/null ; then
@@ -205,7 +206,7 @@ function _kickgateway {
 			DEAD="crashed"
 		fi
 
-		if [[ X"$DEAD" = X ]] && [ "$LORA_TRANSPORT" != "unknown" ]; then
+		if [ X"$DEAD" = X ]; then
 			# set X non-empty if file is more than 10 minutes old
 			X=$(find "$LOGFILE" -mmin +10)
 			if [ X"$X" != X ]; then
@@ -270,6 +271,16 @@ function _kickgateway {
 		elif [ $OPTQUERY -ne 0 ]; then
 			echo "$DEAD (${FSPCT}%)"
 			ACTION=none
+		elif [ X"$DEAD" = Xunknown-transport ]; then
+			# no automatic fix; a reboot needs no transport,
+			# so honor an explicit -R or -B.
+			if [ $OPTREBOOT -ne 0 ] || [ $OPTBOOT -ne 0 ]; then
+				echo "$DEAD (${FSPCT}%), rebooting"
+				ACTION=reboot
+			else
+				echo "$DEAD (${FSPCT}%)"
+				ACTION=none
+			fi
 		elif [ X"$DEAD" = Xhung ] || [ X"$DEAD" = Xfull ] || [ X"$DEAD" = Xconcentrator ] || [ $OPTREBOOT -ne 0 ] || [ $OPTBOOT -ne 0 ]; then
 			echo "$DEAD (${FSPCT}%), rebooting"
 			ACTION=reboot
