@@ -122,6 +122,10 @@ shift $((OPTIND - 1))
 function _kickgateway {
 	local -r id="$1"
 	local -r p="$2"
+	# OPTSEP quoted for the remote shell, so any separator is
+	# passed as data.
+	local qsep
+	printf -v qsep '%q' "$OPTSEP"
 	printf "%s" "$id${OPTSEP}$p${OPTSEP}"
 	ssh </dev/null -o BatchMode=yes -o StrictHostKeyChecking=no -p "$p" root@localhost \
 		'EUI=`mts-io-sysfs show lora/eui`
@@ -131,7 +135,7 @@ function _kickgateway {
 		OPTBOOT='"$OPTBOOT"'
 		OPTRESTART='"$OPTRESTART"'
 		OPTREBOOT='"$OPTREBOOT"'
-		OPTSEP="'"${OPTSEP}"'"
+		OPTSEP='"${qsep}"'
 		typeset -i OPTSTATS='"$OPTSTATS"'
 		typeset -i OPTLISTNAME='"$OPTLISTNAME"'
 	
@@ -193,7 +197,8 @@ function _kickgateway {
 			STATS=$(ifconfig eth0 | awk '\''
 				BEGIN { getline < "/proc/uptime" ; updays = $1 / 86400 }
 				/RX bytes:/ { print(updays, (substr($2,7) + substr($6,7)) / updays * 31 / 1e6) }'\'')
-			printf "%s days${OPTSEP}%s MB/mo${OPTSEP}" ${STATS}
+			set -- ${STATS}
+			printf "%s days%s%s MB/mo%s" "$1" "$OPTSEP" "$2" "$OPTSEP"
 		fi
 
 		# get gateway status. With no transport there is no
