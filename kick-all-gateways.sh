@@ -70,7 +70,7 @@ Options:
 
 	-f {sep}	separator string between fields, default ': '.
 
-	-j {n}		poll at most {n} gateways at once, default 16.
+	-j {n}		poll at most {n} gateways at once, default 32.
 .
 }
 
@@ -86,7 +86,7 @@ typeset -i OPTREBOOT=0
 typeset -i OPTSTATS=0
 typeset -i OPTLISTNAME=0
 OPTSEP=": "
-typeset -i OPTJOBS=16
+typeset -i OPTJOBS=32
 
 typeset -i NEXTBOOL=1
 while getopts Df:j:nBhLQrRsv c

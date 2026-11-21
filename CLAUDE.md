@@ -23,7 +23,7 @@ already carries `shellcheck disable` comments where a warning is intended.
   gateways), and runs `_kickgateway` on each one. `-h` prints the option list.
 
 `kick-all-gateways.sh` runs `_kickgateway` as background jobs, at most `-j`
-(default 16) at a time, using `wait -n` (bash 4.3 or later). Each job writes
+(default 32) at a time, using `wait -n` (bash 4.3 or later). Each job writes
 to its own numbered file in a `mktemp -d` directory, and the script prints the
 files in `live-gateways.sh` order after the last job ends. Anything a job
 prints, including ssh errors, goes into its file. On ^C the script sends
