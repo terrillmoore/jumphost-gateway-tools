@@ -119,7 +119,7 @@ function _kickgateway {
 	local -r id="$1"
 	local -r p="$2"
 	printf "%s" "$id${OPTSEP}$p${OPTSEP}"
-	ssh </dev/null -o BatchMode=yes -p "$p" root@localhost \
+	ssh </dev/null -o BatchMode=yes -o StrictHostKeyChecking=no -p "$p" root@localhost \
 		'EUI=`mts-io-sysfs show lora/eui`
 		FSPCT=$(df -P /var/log/. | tail -1 | awk '\''{ print substr($5, 1, length($5)-1); }'\'')
 		MLINUX="$(head -1 /etc/mlinux-version)"
@@ -130,7 +130,17 @@ function _kickgateway {
 		OPTSEP="'"${OPTSEP}"'"
 		typeset -i OPTSTATS='"$OPTSTATS"'
 		typeset -i OPTLISTNAME='"$OPTLISTNAME"'
-		
+	
+		# guess whether this gateway is using basic station or semtech.
+		if [ -f "/etc/rc6.d/K30lora-basic-station" ]; then
+			LORA_TRANSPORT="basic_station"
+		elif [ -f "/etc/rc6.d/K30ttn-pkt-forwarder" ]; then
+			LORA_TRANSPORT="packet_forwarder"
+		else
+			LORA_TRANSPORT="unknown"
+		fi
+		typeset -r LORA_TRANSPORT
+
 		# get network bytes / day * 31 -- worst case monthly charge
 		if [ $OPTSTATS -ne 0 ]; then
 			STATS=$(ifconfig eth0 | awk '\''
@@ -140,29 +150,59 @@ function _kickgateway {
 		fi
 
 		# get gateway status
-		if [ ! -f /var/run/lora-pkt-fwd.pid ]; then
-			DEAD="stopped"
-		elif kill -0 "$(cat /var/run/lora-pkt-fwd.pid)" 2>/dev/null ; then
-			DEAD=
-		else
-			DEAD="crashed"
-		fi
+		case "$LORA_TRANSPORT" in
+			"packet_forwarder")
+				if [ ! -f /var/run/lora-pkt-fwd.pid ]; then
+					DEAD="stopped"
+				elif kill -0 "$(cat /var/run/lora-pkt-fwd.pid)" 2>/dev/null ; then
+					DEAD=
+				else
+					DEAD="crashed"
+				fi
+				;;
+			"basic_station")
+				if [ -f /var/run/lora/station.pid ]; then
+					if kill -0 "$(cat /var/run/lora/station.pid)" 2>/dev/null ; then
+						DEAD=
+					else
+						DEAD="crashed"
+					fi
+				else	
+					DEAD="stopped"
+				fi
+				;;
+			*)
+				DEAD=
+				;;
+		esac
 
-		if [ X"$DEAD" = X ]; then
-			# set X non-empty if file is more than 10 minutes old
-			X=$(find /var/log/lora-pkt-fwd.log -mmin +10)
-			if [ X"$X" != X ]; then
-				DEAD="hung"
-			fi
+		if [[ X"$DEAD" = X ]]; then
+			case "$LORA_TRANSPORT" in
+				"packet_forwarder")
+					# set X non-empty if file is more than 10 minutes old
+					X=$(find /var/log/lora-pkt-fwd.log -mmin +10)
+					if [ X"$X" != X ]; then
+						DEAD="hung"
+					fi
+					;;
+				"basic_station")
+					X=$(find /var/log/basic-station.log -mmin +10)
+					if [[ X"$X" != X ]]; then
+						DEAD="hung"
+					fi
+					;;
+			esac
 		fi
 
 		if [ X"$DEAD" = Xcrashed ]; then
-			# change DEAD to "concentrator" in case the
-			# router is just stopping immediately.
-			if [ -f /var/log/lora-pkt-fwd.log ]; then
-				LASTLINE=$(tail -1 /var/log/lora-pkt-fwd.log)
-				if [ "$LASTLINE" = "ERROR: [main] failed to start the concentrator" ]; then
-					DEAD="concentrator"
+			if [[ "$LORA_TRANSPORT" = "packet_forwarder" ]]; then
+				# change DEAD to "concentrator" in case the
+				# router is just stopping immediately.
+				if [ -f /var/log/lora-pkt-fwd.log ]; then
+					LASTLINE=$(tail -1 /var/log/lora-pkt-fwd.log)
+					if [ "$LASTLINE" = "ERROR: [main] failed to start the concentrator" ]; then
+						DEAD="concentrator"
+					fi
 				fi
 			fi
 		fi
@@ -183,7 +223,17 @@ function _kickgateway {
 		printf "%s" "$EUI${OPTSEP}"
 		printf "%s%s" "$MLINUX" "$OPTSEP"
 		if [[ $OPTLISTNAME -ne 0 ]]; then
-			DESC=$(grep '\''"description"'\'': /var/config/lora/local_conf.json | cut -d '\''"'\'' -f 4)
+			case "$LORA_TRANSPORT" in
+				"packet_forwarder")
+					DESC=$(grep '\''"description"'\'': /var/config/lora/local_conf.json | cut -d '\''"'\'' -f 4)
+					;;
+				"basic_station")
+					DESC="unknown (Basic Station)"
+					;;
+				*)
+					DESC="unknown (misconfig)"
+					;;
+			esac
 			printf "%s" "$DESC${OPTSEP}"
 		fi
 
@@ -212,7 +262,17 @@ function _kickgateway {
 			reboot
 			;;
 		restart)
-			/etc/init.d/ttn-pkt-forwarder restart
+			case $LORA_TRANSPORT in
+				"packet_forwarder")	
+					/etc/init.d/ttn-pkt-forwarder restart
+					;;
+				"basic_station")
+					/etc/init.d/lora-basic-station restart
+					;;
+				*)
+					printf "transport unknown, unable to restart: %s" "$LORA_TRANSPORT"
+					;;
+			esac
 			;;
 		none)
 			true
