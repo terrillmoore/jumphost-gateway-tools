@@ -54,11 +54,13 @@ Options:
 
 	-L		list the descriptions of each gateway.
 
-	-Q		query only, don't try to fix problems.
+	-Q		query only; take no action, even with -B, -r
+			or -R.
 
-	-r		always restart the packet forwarder (as a minimum)
+	-r		restart the forwarder even if it is healthy. A
+			fault that needs a reboot still reboots.
 
-	-R		reboot the gateway (as a minimum if any problems are seen)
+	-R		reboot every matching gateway, healthy or not.
 
 	-s		display stats
 
@@ -262,12 +264,17 @@ function _kickgateway {
 		fi
 
 		if [ X"$DEAD" = X ]; then
-			echo "ok (${FSPCT}%)"
 			ACTION=none
-			if [ $OPTREBOOT -ne 0 ]; then
+			if [ $OPTQUERY -ne 0 ]; then
+				echo "ok (${FSPCT}%)"
+			elif [ $OPTREBOOT -ne 0 ]; then
+				echo "ok (${FSPCT}%), rebooting"
 				ACTION=reboot
 			elif [ $OPTRESTART -ne 0 ]; then
+				echo "ok (${FSPCT}%), restarting"
 				ACTION=restart
+			else
+				echo "ok (${FSPCT}%)"
 			fi
 		elif [ $OPTQUERY -ne 0 ]; then
 			echo "$DEAD (${FSPCT}%)"
