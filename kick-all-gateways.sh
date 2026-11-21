@@ -41,6 +41,10 @@ Operation:
 	to the corresponding gateway. If no patterns are given, all gateways
 	are selected.
 
+	The selected gateways are polled in parallel, at most {n} at a
+	time (see -j). The output appears when all polls are done, one
+	line per gateway, in the order live-gateways.sh lists them.
+
 Options:
 	-h		displays help (this message), and exits.
 
@@ -65,11 +69,13 @@ Options:
 	-s		display stats
 
 	-f {sep}	separator string between fields, default ': '.
+
+	-j {n}		poll at most {n} gateways at once, default 16.
 .
 }
 
 #### argument scanning:  usage ####
-USAGE="${PNAME} -[DhBLQRrsv f*] [pattern ...]"
+USAGE="${PNAME} -[DhBLQRrsv f* j#] [pattern ...]"
 
 typeset -i OPTDEBUG=0
 typeset -i OPTVERBOSE=0
@@ -80,9 +86,10 @@ typeset -i OPTREBOOT=0
 typeset -i OPTSTATS=0
 typeset -i OPTLISTNAME=0
 OPTSEP=": "
+typeset -i OPTJOBS=16
 
 typeset -i NEXTBOOL=1
-while getopts Df:nBhLQrRsv c
+while getopts Df:j:nBhLQrRsv c
 do
 	if [ $NEXTBOOL -eq -1 ]; then
 		NEXTBOOL=0
@@ -97,6 +104,13 @@ do
 	case $c in
 	D)	OPTDEBUG=$NEXTBOOL;;
 	f)	OPTSEP="$OPTARG";;
+	j)	if [[ "$OPTARG" =~ ^[1-9][0-9]*$ ]]; then
+			OPTJOBS="$OPTARG"
+		else
+			echo "$PNAME: -j needs a positive integer" 1>&2
+			exit 1
+		fi
+		;;
 	B)	OPTBOOT=$NEXTBOOL;;
 	h)	_help
 		exit 0
@@ -127,7 +141,12 @@ function _kickgateway {
 	local qsep
 	printf -v qsep '%q' "$OPTSEP"
 	printf "%s" "$id${OPTSEP}$p${OPTSEP}"
-	ssh </dev/null -o BatchMode=yes -o StrictHostKeyChecking=no -p "$p" root@localhost \
+	# the timeouts keep a dead tunnel from holding a job slot
+	# indefinitely.
+	ssh </dev/null -o BatchMode=yes -o StrictHostKeyChecking=no \
+		-o ConnectTimeout=20 \
+		-o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+		-p "$p" root@localhost \
 		'EUI=`mts-io-sysfs show lora/eui`
 		FSPCT=$(df -P /var/log/. | tail -1 | awk '\''{ print substr($5, 1, length($5)-1); }'\'')
 		MLINUX="$(head -1 /etc/mlinux-version)"
@@ -331,21 +350,51 @@ function _genawkpgm {
 	printf ' { print }\n'
 }
 
+### _selectgateways [pattern ...]
+### print "login port" for each live gateway that matches any of
+### the awk patterns, or for every live gateway if there are none.
+function _selectgateways {
+	if [ $# -eq 0 ]; then
+		"$PPATH/live-gateways.sh"
+	else
+		"$PPATH/live-gateways.sh" | awk "$(_genawkpgm "$@")"
+	fi
+}
+
 ### do the work ###
-if [ $# -eq 0 ]; then
-	# hit all the gateways
-	"$PPATH/live-gateways.sh" |
-		while read -r id p ; do
-			_kickgateway "$id" "$p"
-		done
-else
-	# the parameters are awk patterns; any gateway that matches
-	# any pattern will be handed to _kickgateway.
-	"$PPATH/live-gateways.sh" |
-		awk "$(_genawkpgm "$@")" |
-		while read -r id p ; do
-			_kickgateway "$id" "$p"
-		done
-fi
+
+# Poll the gateways in parallel, at most OPTJOBS at a time. Each
+# poll writes to its own file, numbered in the order live-gateways.sh
+# lists the gateways, and the files are printed in that order once
+# all polls are done.
+OUTDIR="$(mktemp -d)" || { echo "$PNAME: can't create temp dir" 1>&2 ; exit 1 ; }
+trap 'rm -rf "$OUTDIR"' EXIT
+
+# On ^C or SIGTERM, send SIGTERM to the whole process group, so that
+# every poll and its ssh stop even if one ignores SIGINT. This shell
+# ignores that SIGTERM, so it can exit and remove OUTDIR.
+trap 'trap "" TERM; kill -TERM 0 2>/dev/null; exit 130' INT TERM
+
+typeset -i NGW=0
+typeset -i NRUNNING=0
+while read -r id p ; do
+	if [ $NRUNNING -ge $OPTJOBS ]; then
+		wait -n
+		NRUNNING=$((NRUNNING - 1))
+	fi
+	_kickgateway "$id" "$p" >"$OUTDIR/$(printf '%05d' $NGW)" 2>&1 &
+	NGW=$((NGW + 1))
+	NRUNNING=$((NRUNNING + 1))
+done < <(_selectgateways "$@")
+wait
+
+for f in "$OUTDIR"/* ; do
+	[ -f "$f" ] || continue
+	cat "$f"
+	# a failed ssh leaves the line without a newline.
+	if [ -n "$(tail -c 1 "$f")" ]; then
+		echo
+	fi
+done
 
 exit 0
