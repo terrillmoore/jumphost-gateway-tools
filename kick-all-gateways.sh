@@ -10,6 +10,24 @@
 PNAME="$(basename "$0")"
 PPATH="$(dirname "$0")"
 
+# The polling loop needs bash 5.1 or later (wait -n -p). macOS ships
+# bash 3.2 as /bin/bash, so if this bash is too old, run the script
+# again with a newer bash from PATH or Homebrew. This test must stay
+# runnable by bash 3.2.
+# shellcheck disable=2016 # expanded by eval and by bash -c.
+BASHTEST='[ "${BASH_VERSINFO[0]}" -gt 5 ] ||
+	{ [ "${BASH_VERSINFO[0]}" -eq 5 ] && [ "${BASH_VERSINFO[1]}" -ge 1 ]; }'
+if ! eval "$BASHTEST"; then
+	for b in $(type -ap bash) /opt/homebrew/bin/bash /usr/local/bin/bash; do
+		if [ -x "$b" ] && "$b" -c "$BASHTEST" 2>/dev/null; then
+			exec "$b" "$0" "$@"
+		fi
+	done
+	echo "$PNAME: needs bash 5.1 or later; this is bash $BASH_VERSION." 1>&2
+	echo "$PNAME: on macOS: brew install bash" 1>&2
+	exit 1
+fi
+
 if [ ! -x "$PPATH/live-gateways.sh" ]; then
 	echo "Can't find live-gateways.sh" 1>&2
 	exit 1

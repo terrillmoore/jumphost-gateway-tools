@@ -27,7 +27,10 @@ already carries `shellcheck disable` comments where a warning is intended.
 writes to its own file in a `mktemp -d` directory. When a job ends, the script
 prints its file and removes it, so lines come out in the order the gateways
 answer, and one gateway's output never splits another's. Anything a job
-prints, including ssh errors, goes into its file. On ^C the script sends
+prints, including ssh errors, goes into its file. If the running bash is older than 5.1
+(macOS ships 3.2 as `/bin/bash`), the script runs itself again with a newer
+bash from `PATH`, `/opt/homebrew/bin` or `/usr/local/bin`, or else exits with
+an error. Keep that check, and everything before it, runnable by bash 3.2. On ^C the script sends
 SIGTERM to its process group and removes the directory.
 
 `-H {host}` names the jumphost, and `-l` says this machine is the jumphost.
