@@ -455,6 +455,18 @@ function _jsonnum {
 	fi
 }
 
+### _onedecimal {value}
+### print a number with one digit after the decimal point; print
+### anything else (such as an empty value) as given.
+function _onedecimal {
+	local LC_ALL=C
+	if [[ "$1" =~ ^-?[0-9]+(\.[0-9]+)?([eE][-+]?[0-9]+)?$ ]]; then
+		printf '%.1f' "$1"
+	else
+		printf '%s' "$1"
+	fi
+}
+
 ### _derivestats {array}
 ### add uptime_days, link_mb and mb_per_month to the associative array
 ### named, from its uptime_secs, link and link_bytes. link_mb is the
@@ -534,11 +546,11 @@ function _formatgateway {
 
 	out="$id$OPTSEP$p$OPTSEP"
 	if [ $OPTSTATS -ne 0 ]; then
-		out+="${F[uptime_days]} days$OPTSEP"
+		out+="$(_onedecimal "${F[uptime_days]}") days$OPTSEP"
 		if [ -n "${F[mb_per_month]}" ]; then
-			out+="${F[mb_per_month]} MB/mo$OPTSEP"
+			out+="$(_onedecimal "${F[mb_per_month]}") MB/mo$OPTSEP"
 		else
-			out+="${F[link_mb]} MB since link up$OPTSEP"
+			out+="$(_onedecimal "${F[link_mb]}") MB since link up$OPTSEP"
 		fi
 	fi
 	out+="${F[eui]}$OPTSEP${F[mlinux]}$OPTSEP${F[link]}$OPTSEP"
