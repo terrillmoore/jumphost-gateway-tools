@@ -23,10 +23,14 @@ already carries `shellcheck disable` comments where a warning is intended.
   gateways), and runs `_kickgateway` on each one. `-h` prints the option list.
 
 `kick-all-gateways.sh` runs `_kickgateway` as background jobs, at most `-j`
-(default 32) at a time, using `wait -n` (bash 4.3 or later). Each job writes
-to its own numbered file in a `mktemp -d` directory, and the script prints the
-files in `live-gateways.sh` order after the last job ends. Anything a job
-prints, including ssh errors, goes into its file. On ^C the script sends
+(default 32) at a time, using `wait -n -p` (bash 5.1 or later). Each job
+writes to its own file in a `mktemp -d` directory. When a job ends, the script
+prints its file and removes it, so lines come out in the order the gateways
+answer, and one gateway's output never splits another's. Anything a job
+prints, including ssh errors, goes into its file. If the running bash is older than 5.1
+(macOS ships 3.2 as `/bin/bash`), the script runs itself again with a newer
+bash from `PATH`, `/opt/homebrew/bin` or `/usr/local/bin`, or else exits with
+an error. Keep that check, and everything before it, runnable by bash 3.2. On ^C the script sends
 SIGTERM to its process group and removes the directory.
 
 `-H {host}` names the jumphost, and `-l` says this machine is the jumphost.
