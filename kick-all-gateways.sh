@@ -180,14 +180,10 @@ fi
 function _kickgateway {
 	local -r id="$1"
 	local -r p="$2"
-	# OPTSEP quoted for the remote shell, so any separator is
-	# passed as data.
-	local qsep
-	printf -v qsep '%q' "$OPTSEP"
-	printf "%s" "$id${OPTSEP}$p${OPTSEP}"
+	local raw
 	# the timeouts keep a dead tunnel from holding a job slot
 	# indefinitely.
-	ssh </dev/null "${GWSSHOPTS[@]}" \
+	raw=$(ssh </dev/null "${GWSSHOPTS[@]}" \
 		-o BatchMode=yes -o StrictHostKeyChecking=no \
 		-o ConnectTimeout=20 \
 		-o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
@@ -199,9 +195,6 @@ function _kickgateway {
 		OPTBOOT='"$OPTBOOT"'
 		OPTRESTART='"$OPTRESTART"'
 		OPTREBOOT='"$OPTREBOOT"'
-		OPTSEP='"${qsep}"'
-		typeset -i OPTSTATS='"$OPTSTATS"'
-		typeset -i OPTLISTNAME='"$OPTLISTNAME"'
 	
 		# gwinfo {key}: print the string value of gateway_conf.{key}
 		# from gateway_info.json, written by ttn-multitech-cm with
@@ -257,13 +250,12 @@ function _kickgateway {
 		esac
 
 		# get network bytes / day * 31 -- worst case monthly charge
-		if [ $OPTSTATS -ne 0 ]; then
-			STATS=$(ifconfig eth0 | awk '\''
-				BEGIN { getline < "/proc/uptime" ; updays = $1 / 86400 }
-				/RX bytes:/ { print(updays, (substr($2,7) + substr($6,7)) / updays * 31 / 1e6) }'\'')
-			set -- ${STATS}
-			printf "%s days%s%s MB/mo%s" "$1" "$OPTSEP" "$2" "$OPTSEP"
-		fi
+		STATS=$(ifconfig eth0 | awk '\''
+			BEGIN { getline < "/proc/uptime" ; updays = $1 / 86400 }
+			/RX bytes:/ { print(updays, (substr($2,7) + substr($6,7)) / updays * 31 / 1e6) }'\'')
+		set -- ${STATS}
+		UPDAYS="$1"
+		MBPERMONTH="$2"
 
 		# get gateway status. With no transport there is no
 		# pid or log file to check.
@@ -340,59 +332,56 @@ function _kickgateway {
 			fi
 		fi
 
-		printf "%s" "$EUI${OPTSEP}"
-		printf "%s%s" "$MLINUX" "$OPTSEP"
-		if [[ $OPTLISTNAME -ne 0 ]]; then
-			DESC=$(gwinfo description)
-			if [ -z "$DESC" ]; then
-				case "$LORA_TRANSPORT" in
-					"packet_forwarder")
-						DESC=$(grep '\''"description"'\'': /var/config/lora/local_conf.json | cut -d '\''"'\'' -f 4)
-						;;
-					"basic_station")
-						DESC="unknown (Basic Station)"
-						;;
-					*)
-						DESC="unknown (misconfig)"
-						;;
-				esac
-			fi
-			printf "%s" "$DESC${OPTSEP}"
+		DESC=$(gwinfo description)
+		if [ -z "$DESC" ]; then
+			case "$LORA_TRANSPORT" in
+				"packet_forwarder")
+					DESC=$(grep '\''"description"'\'': /var/config/lora/local_conf.json 2>/dev/null | cut -d '\''"'\'' -f 4)
+					;;
+				"basic_station")
+					DESC="unknown (Basic Station)"
+					;;
+				*)
+					DESC="unknown (misconfig)"
+					;;
+			esac
 		fi
 
-		if [ X"$DEAD" = X ]; then
+		# choose the action. -Q does nothing; an unknown transport
+		# has no init script, so only an explicit -R or -B reboots.
+		if [ $OPTQUERY -ne 0 ]; then
 			ACTION=none
-			if [ $OPTQUERY -ne 0 ]; then
-				echo "ok (${FSPCT}%)"
-			elif [ $OPTREBOOT -ne 0 ]; then
-				echo "ok (${FSPCT}%), rebooting"
+		elif [ X"$DEAD" = X ]; then
+			ACTION=none
+			if [ $OPTREBOOT -ne 0 ]; then
 				ACTION=reboot
 			elif [ $OPTRESTART -ne 0 ]; then
-				echo "ok (${FSPCT}%), restarting"
 				ACTION=restart
-			else
-				echo "ok (${FSPCT}%)"
 			fi
-		elif [ $OPTQUERY -ne 0 ]; then
-			echo "$DEAD (${FSPCT}%)"
-			ACTION=none
 		elif [ X"$DEAD" = Xunknown-transport ]; then
-			# no automatic fix; a reboot needs no transport,
-			# so honor an explicit -R or -B.
+			ACTION=none
 			if [ $OPTREBOOT -ne 0 ] || [ $OPTBOOT -ne 0 ]; then
-				echo "$DEAD (${FSPCT}%), rebooting"
 				ACTION=reboot
-			else
-				echo "$DEAD (${FSPCT}%)"
-				ACTION=none
 			fi
 		elif [ X"$DEAD" = Xhung ] || [ X"$DEAD" = Xfull ] || [ X"$DEAD" = Xconcentrator ] || [ X"$DEAD" = Xorphan ] || [ $OPTREBOOT -ne 0 ] || [ $OPTBOOT -ne 0 ]; then
-			echo "$DEAD (${FSPCT}%), rebooting"
 			ACTION=reboot
 		else
-			echo "$DEAD (${FSPCT}%), restarting"
 			ACTION=restart
 		fi
+
+		# report as "@key=value" lines, ended by "@end"; the jumphost
+		# side formats them. Anything printed after "@end" is output
+		# from the action.
+		echo "@eui=$EUI"
+		echo "@mlinux=$MLINUX"
+		echo "@description=$DESC"
+		echo "@transport=$LORA_TRANSPORT"
+		echo "@status=${DEAD:-ok}"
+		echo "@fspct=$FSPCT"
+		echo "@uptime_days=$UPDAYS"
+		echo "@mb_per_month=$MBPERMONTH"
+		echo "@action=$ACTION"
+		echo "@end"
 
 		case $ACTION in
 
@@ -406,7 +395,55 @@ function _kickgateway {
 			true
 			;;
 
-		esac'
+		esac' 2>&1)
+
+	_formatgateway "$id" "$p" "$raw"
+}
+
+### _formatgateway {id} {port} {raw}
+### print the report for one gateway from the raw output of its ssh:
+### "@key=value" lines up to "@end", then the action's output. If
+### there is no "@end", the ssh failed, and raw is its error text.
+function _formatgateway {
+	local -r id="$1"
+	local -r p="$2"
+	local -r raw="$3"
+	local -A F=()
+	local log=""
+	local line
+	local -i ended=0
+	local out
+
+	while IFS= read -r line; do
+		if [ $ended -eq 0 ] && [ "$line" = "@end" ]; then
+			ended=1
+		elif [ $ended -eq 0 ] && [[ "$line" =~ ^@([a-z_]+)=(.*)$ ]]; then
+			F[${BASH_REMATCH[1]}]="${BASH_REMATCH[2]}"
+		else
+			log+="$line"$'\n'
+		fi
+	done <<<"$raw"
+
+	if [ $ended -eq 0 ]; then
+		printf '%s\n' "$id$OPTSEP$p$OPTSEP$raw"
+		return
+	fi
+
+	out="$id$OPTSEP$p$OPTSEP"
+	if [ $OPTSTATS -ne 0 ]; then
+		out+="${F[uptime_days]} days$OPTSEP${F[mb_per_month]} MB/mo$OPTSEP"
+	fi
+	out+="${F[eui]}$OPTSEP${F[mlinux]}$OPTSEP"
+	if [ $OPTLISTNAME -ne 0 ]; then
+		out+="${F[description]}$OPTSEP"
+	fi
+	out+="${F[status]} (${F[fspct]}%)"
+	case "${F[action]}" in
+	reboot)		out+=", rebooting";;
+	restart)	out+=", restarting";;
+	esac
+	printf '%s\n' "$out"
+	printf '%s' "$log"
 }
 
 # generate an awk program that matches any of the patterns given
