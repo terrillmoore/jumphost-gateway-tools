@@ -54,6 +54,9 @@ the transport:
 The script then reports status:
 
 - Pid file missing means `stopped`; a dead PID means `crashed`.
+- A forwarder process (`pidof mp_pkt_fwd.usb mp_pkt_fwd.spi`, or `pidof
+  station`) other than the one the pid file names means `orphan`, whatever
+  the pid file says. The init scripts stop only the pid file's process.
 - A log file older than 10 minutes means `hung`.
 - On the packet forwarder only, a last log line ending in
   `ERROR: [main] failed to start the concentrator` (with or without a leading
@@ -63,7 +66,7 @@ The script then reports status:
   a reboot.
 - `/var/log` usage over 75% means `full`, whatever the transport.
 
-`hung`, `full`, `concentrator`, `-R` and `-B` lead to `reboot`; other faults
+`hung`, `full`, `concentrator`, `orphan`, `-R` and `-B` lead to `reboot`; other faults
 run the init script's `restart`. `-Q` reports without acting.
 
 Output is one line per gateway, fields joined by the `-f` separator (default
