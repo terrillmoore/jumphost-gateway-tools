@@ -42,8 +42,9 @@ Operation:
 	are selected.
 
 	The selected gateways are polled in parallel, at most {n} at a
-	time (see -j). The output appears when all polls are done, one
-	line per gateway, in the order live-gateways.sh lists them.
+	time (see -j). Each gateway's line appears when its poll ends,
+	so the order changes from run to run; pipe the output through
+	sort for a stable order.
 
 Options:
 	-h		displays help (this message), and exits.
@@ -428,9 +429,9 @@ function _selectgateways {
 ### do the work ###
 
 # Poll the gateways in parallel, at most OPTJOBS at a time. Each
-# poll writes to its own file, numbered in the order live-gateways.sh
-# lists the gateways, and the files are printed in that order once
-# all polls are done.
+# poll writes to its own file, which is printed and removed as soon
+# as that poll ends, so one gateway's output is never split by
+# another's.
 OUTDIR="$(mktemp -d)" || { echo "$PNAME: can't create temp dir" 1>&2 ; exit 1 ; }
 trap 'rm -rf "$OUTDIR"' EXIT
 
@@ -464,26 +465,48 @@ fi
 # ignores that SIGTERM, so it can exit and remove OUTDIR.
 trap 'trap "" TERM; kill -TERM 0 2>/dev/null; exit 130' INT TERM
 
-typeset -i NGW=0
-typeset -i NRUNNING=0
-while read -r id p ; do
-	if [ $NRUNNING -ge $OPTJOBS ]; then
-		wait -n
-		NRUNNING=$((NRUNNING - 1))
-	fi
-	_kickgateway "$id" "$p" >"$OUTDIR/$(printf '%05d' $NGW)" 2>&1 &
-	NGW=$((NGW + 1))
-	NRUNNING=$((NRUNNING + 1))
-done < <(_selectgateways "$@")
-wait
+# output file of each running poll, by PID.
+declare -A JOBFILE
 
-for f in "$OUTDIR"/* ; do
-	[ -f "$f" ] || continue
+### _reapone
+### wait for one poll to end, then print and remove its output file.
+### Returns nonzero if no poll is running.
+function _reapone {
+	local endpid
+	local f
+	while : ; do
+		# -p (bash 5.1) gives the PID that ended. Skip the process
+		# substitution that feeds the main loop, which is not a poll.
+		wait -n -p endpid
+		[ -n "$endpid" ] || return 1
+		f="${JOBFILE[$endpid]}"
+		[ -n "$f" ] && break
+	done
+	unset 'JOBFILE[$endpid]'
 	cat "$f"
 	# a failed ssh leaves the line without a newline.
 	if [ -n "$(tail -c 1 "$f")" ]; then
 		echo
 	fi
+	rm -f "$f"
+}
+
+typeset -i NGW=0
+typeset -i NRUNNING=0
+while read -r id p ; do
+	if [ $NRUNNING -ge $OPTJOBS ]; then
+		_reapone
+		NRUNNING=$((NRUNNING - 1))
+	fi
+	f="$OUTDIR/$(printf '%05d' $NGW)"
+	_kickgateway "$id" "$p" >"$f" 2>&1 &
+	JOBFILE[$!]="$f"
+	NGW=$((NGW + 1))
+	NRUNNING=$((NRUNNING + 1))
+done < <(_selectgateways "$@")
+
+while [ $NRUNNING -gt 0 ] && _reapone ; do
+	NRUNNING=$((NRUNNING - 1))
 done
 
 exit 0
