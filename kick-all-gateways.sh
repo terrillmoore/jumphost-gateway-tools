@@ -232,6 +232,30 @@ function _kickgateway {
 			DEAD="crashed"
 		fi
 
+		# a forwarder process not named in the pid file is an
+		# orphan. The init script stops only the pid file process,
+		# so a restart leaves the orphan holding the radio.
+		case "$LORA_TRANSPORT" in
+			"packet_forwarder")
+				FWDPROGS="mp_pkt_fwd.usb mp_pkt_fwd.spi"
+				;;
+			"basic_station")
+				FWDPROGS="station"
+				;;
+			*)
+				FWDPROGS=
+				;;
+		esac
+		if [ -n "$FWDPROGS" ]; then
+			FWDPID=
+			[ -f "$PIDFILE" ] && FWDPID=$(cat "$PIDFILE")
+			for pid in $(pidof $FWDPROGS); do
+				if [ "$pid" != "$FWDPID" ]; then
+					DEAD="orphan"
+				fi
+			done
+		fi
+
 		if [ X"$DEAD" = X ]; then
 			# set X non-empty if file is more than 10 minutes old
 			X=$(find "$LOGFILE" -mmin +10)
@@ -317,7 +341,7 @@ function _kickgateway {
 				echo "$DEAD (${FSPCT}%)"
 				ACTION=none
 			fi
-		elif [ X"$DEAD" = Xhung ] || [ X"$DEAD" = Xfull ] || [ X"$DEAD" = Xconcentrator ] || [ $OPTREBOOT -ne 0 ] || [ $OPTBOOT -ne 0 ]; then
+		elif [ X"$DEAD" = Xhung ] || [ X"$DEAD" = Xfull ] || [ X"$DEAD" = Xconcentrator ] || [ X"$DEAD" = Xorphan ] || [ $OPTREBOOT -ne 0 ] || [ $OPTBOOT -ne 0 ]; then
 			echo "$DEAD (${FSPCT}%), rebooting"
 			ACTION=reboot
 		else
