@@ -88,8 +88,27 @@ The script then reports status:
 `hung`, `full`, `concentrator`, `orphan`, `-R` and `-B` lead to `reboot`; other faults
 run the init script's `restart`. `-Q` reports without acting.
 
+The remote script prints its results as `@key=value` lines ended by `@end`,
+then runs the action; anything after `@end` is the action's output.
+`_formatgateway` on the jumphost side parses them. Output there with no
+`@end` means the ssh failed.
+
 Output is one line per gateway, fields joined by the `-f` separator (default
-`": "`): login, port, `-s` stats, EUI, mLinux version, `-L` description, status.
+`": "`): login, port, `-s` stats, EUI, mLinux version, link, `-L` description,
+status.
+
+The link is the interface of the default route: `ethernet` (`eth*`),
+`cellular` (`ppp*`, `wwan*`), `none`, or the interface name. `-s` counts rx
+plus tx bytes on that interface. On ethernet it shows MB per month: the rate
+since boot times 31 days. On cellular it shows only MB since the link came up,
+because `ppp0`'s counts start again at each reconnect and the gateway has no
+trustworthy record of when that was. The age of the `/sys/class/net` entry is
+not one: entries made before the clock is set carry dates years off, and the
+kernel can rebuild an entry with a new date.
+
+`-o json` prints one JSON object per gateway per line, with every field
+whatever `-s` and `-L` say, and `null` for missing values. A failed ssh gives
+an object with `login`, `port`, `time` and `error` only.
 
 Option parsing uses `getopts` with an undocumented `-n` that negates the next
 boolean option (for example `-nQ`). Boolean options are `typeset -i` variables
