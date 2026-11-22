@@ -38,3 +38,8 @@ Useful scripts for managing gateways configured using [conduit-mfg](https://gith
    In the above, the packet forwarder for `ttn-ithaca-00-08-00-4a-2b-2b` has crashed, and is restarted. The packet forwarder of `ttn-ithaca-00-08-00-4a-37-6a` is discovered to have stopped, so it also is restarted.
    
    **Note:** it is a good idea to make sure that nobody is working on the packet forwarder locally when running this script, as they may have intentionally stopped the packet forwarder.
+
+   To run it from another machine, name the jumphost with `-H`; you need ssh keys for the jumphost and for the gateways:
+   ```console
+   $ ./kick-all-gateways.sh -Q -H jumphost.example.com
+   ```
