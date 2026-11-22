@@ -39,7 +39,4 @@ Useful scripts for managing gateways configured using [conduit-mfg](https://gith
    
    **Note:** it is a good idea to make sure that nobody is working on the packet forwarder locally when running this script, as they may have intentionally stopped the packet forwarder.
 
-   To run it from another machine, name the jumphost with `-H`; you need ssh keys for the jumphost and for the gateways:
-   ```console
-   $ ./kick-all-gateways.sh -Q -H jumphost.example.com
-   ```
+   The script also runs from other machines; you need ssh keys for the jumphost and for the gateways. It reaches the gateways through `jumphost.ttni.tech` unless the gateway tunnels end on the machine it runs on. `-H {host}` names another jumphost, and `-l` makes it use the tunnels on the machine it runs on.
