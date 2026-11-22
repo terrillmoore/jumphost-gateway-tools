@@ -55,8 +55,9 @@ The script then reports status:
 
 - Pid file missing means `stopped`; a dead PID means `crashed`.
 - A log file older than 10 minutes means `hung`.
-- On the packet forwarder only, a last log line of
-  `ERROR: [main] failed to start the concentrator` turns `crashed` into `concentrator`.
+- On the packet forwarder only, a last log line ending in
+  `ERROR: [main] failed to start the concentrator` (with or without a leading
+  timestamp) turns `crashed` into `concentrator`.
 - With an unknown transport, the script skips the forwarder checks above and
   reports `unknown-transport`. It takes no action unless `-R` or `-B` asks for
   a reboot.

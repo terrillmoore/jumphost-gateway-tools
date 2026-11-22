@@ -243,12 +243,16 @@ function _kickgateway {
 		if [ X"$DEAD" = Xcrashed ]; then
 			if [[ "$LORA_TRANSPORT" = "packet_forwarder" ]]; then
 				# change DEAD to "concentrator" in case the
-				# router is just stopping immediately.
+				# router is just stopping immediately. The mp
+				# forwarder (3.0.25) puts a timestamp before
+				# the message, so match the end of the line.
 				if [ -f "$LOGFILE" ]; then
 					LASTLINE=$(tail -1 "$LOGFILE")
-					if [ "$LASTLINE" = "ERROR: [main] failed to start the concentrator" ]; then
+					case "$LASTLINE" in
+					*"ERROR: [main] failed to start the concentrator")
 						DEAD="concentrator"
-					fi
+						;;
+					esac
 				fi
 			fi
 		fi
