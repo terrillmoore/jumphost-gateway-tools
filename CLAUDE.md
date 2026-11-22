@@ -29,7 +29,13 @@ files in `live-gateways.sh` order after the last job ends. Anything a job
 prints, including ssh errors, goes into its file. On ^C the script sends
 SIGTERM to its process group and removes the directory.
 
-With `-H {host}`, `kick-all-gateways.sh` runs on another machine. It opens
+`-H {host}` names the jumphost, and `-l` says this machine is the jumphost.
+With neither, the script checks `netstat -ln` for gateway tunnels on
+`::1:20xxx`: if there are any, it acts as `-l`, otherwise as
+`-H jumphost.ttni.tech` (`DEFAULTJUMPHOST`). The jumphost's hostname is an
+EC2 internal name, so the script can't compare names.
+
+With `-H`, `kick-all-gateways.sh` runs on another machine. It opens
 one ssh master connection to the jumphost (`ControlPath` in the temp
 directory), runs the local `live-gateways.sh` there with `bash -s`, and
 reaches each gateway as `root@::1` through `ssh -W` on that connection. One

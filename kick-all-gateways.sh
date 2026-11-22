@@ -72,14 +72,19 @@ Options:
 
 	-j {n}		poll at most {n} gateways at once, default 32.
 
-	-H {host}	run from a machine other than the jumphost; {host}
-			is the jumphost's ssh destination. The caller needs
-			ssh keys for the jumphost and for the gateways.
+	-H {host}	reach the gateways through the jumphost {host},
+			an ssh destination. The caller needs ssh keys for
+			the jumphost and for the gateways. The default is
+			$DEFAULTJUMPHOST, unless gateway tunnels end on
+			this machine (it is the jumphost).
+
+	-l		reach the gateways through their tunnels on this
+			machine, as on the jumphost; the opposite of -H.
 .
 }
 
 #### argument scanning:  usage ####
-USAGE="${PNAME} -[DhBLQRrsv f* H* j#] [pattern ...]"
+USAGE="${PNAME} -[DhBLlQRrsv f* H* j#] [pattern ...]"
 
 typeset -i OPTDEBUG=0
 typeset -i OPTVERBOSE=0
@@ -91,10 +96,13 @@ typeset -i OPTSTATS=0
 typeset -i OPTLISTNAME=0
 OPTSEP=": "
 typeset -i OPTJOBS=32
-OPTHOST=
+# the jumphost's ssh destination; empty means this machine is the
+# jumphost. Unset until -H or -l gives it.
+unset OPTHOST
+DEFAULTJUMPHOST=jumphost.ttni.tech
 
 typeset -i NEXTBOOL=1
-while getopts Df:H:j:nBhLQrRsv c
+while getopts Df:H:j:nBhLlQrRsv c
 do
 	if [ $NEXTBOOL -eq -1 ]; then
 		NEXTBOOL=0
@@ -122,6 +130,7 @@ do
 		exit 0
 		;;
 	L)	OPTLISTNAME=$NEXTBOOL;;
+	l)	OPTHOST=;;
 	n)	NEXTBOOL=-1;;
 	Q)	OPTQUERY=$NEXTBOOL;;
 	r)	OPTRESTART=$NEXTBOOL;;
@@ -135,6 +144,16 @@ done
 
 #### get rid of scanned options ####
 shift $((OPTIND - 1))
+
+# with neither -H nor -l, use this machine if the gateway tunnels
+# (as live-gateways.sh finds them) end here, else the default jumphost.
+if [ -z "${OPTHOST+set}" ]; then
+	if netstat -ln 2>/dev/null | grep -q '::1:20[0-9][0-9][0-9]'; then
+		OPTHOST=
+	else
+		OPTHOST="$DEFAULTJUMPHOST"
+	fi
+fi
 
 ### _kickgateway {id} {port}
 ### kick the gateway on the specified port according
