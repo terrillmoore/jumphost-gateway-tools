@@ -71,11 +71,15 @@ Options:
 	-f {sep}	separator string between fields, default ': '.
 
 	-j {n}		poll at most {n} gateways at once, default 32.
+
+	-H {host}	run from a machine other than the jumphost; {host}
+			is the jumphost's ssh destination. The caller needs
+			ssh keys for the jumphost and for the gateways.
 .
 }
 
 #### argument scanning:  usage ####
-USAGE="${PNAME} -[DhBLQRrsv f* j#] [pattern ...]"
+USAGE="${PNAME} -[DhBLQRrsv f* H* j#] [pattern ...]"
 
 typeset -i OPTDEBUG=0
 typeset -i OPTVERBOSE=0
@@ -87,9 +91,10 @@ typeset -i OPTSTATS=0
 typeset -i OPTLISTNAME=0
 OPTSEP=": "
 typeset -i OPTJOBS=32
+OPTHOST=
 
 typeset -i NEXTBOOL=1
-while getopts Df:j:nBhLQrRsv c
+while getopts Df:H:j:nBhLQrRsv c
 do
 	if [ $NEXTBOOL -eq -1 ]; then
 		NEXTBOOL=0
@@ -104,6 +109,7 @@ do
 	case $c in
 	D)	OPTDEBUG=$NEXTBOOL;;
 	f)	OPTSEP="$OPTARG";;
+	H)	OPTHOST="$OPTARG";;
 	j)	if [[ "$OPTARG" =~ ^[1-9][0-9]*$ ]]; then
 			OPTJOBS="$OPTARG"
 		else
@@ -143,10 +149,11 @@ function _kickgateway {
 	printf "%s" "$id${OPTSEP}$p${OPTSEP}"
 	# the timeouts keep a dead tunnel from holding a job slot
 	# indefinitely.
-	ssh </dev/null -o BatchMode=yes -o StrictHostKeyChecking=no \
+	ssh </dev/null "${GWSSHOPTS[@]}" \
+		-o BatchMode=yes -o StrictHostKeyChecking=no \
 		-o ConnectTimeout=20 \
 		-o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
-		-p "$p" root@localhost \
+		-p "$p" "root@$GWHOST" \
 		'EUI=`mts-io-sysfs show lora/eui`
 		FSPCT=$(df -P /var/log/. | tail -1 | awk '\''{ print substr($5, 1, length($5)-1); }'\'')
 		MLINUX="$(head -1 /etc/mlinux-version)"
@@ -378,14 +385,24 @@ function _genawkpgm {
 	printf ' { print }\n'
 }
 
+### _livegateways
+### run live-gateways.sh, on the jumphost given by -H if any.
+function _livegateways {
+	if [ -n "$OPTHOST" ]; then
+		ssh "${JHSSHOPTS[@]}" "$OPTHOST" bash -s <"$PPATH/live-gateways.sh"
+	else
+		"$PPATH/live-gateways.sh"
+	fi
+}
+
 ### _selectgateways [pattern ...]
 ### print "login port" for each live gateway that matches any of
 ### the awk patterns, or for every live gateway if there are none.
 function _selectgateways {
 	if [ $# -eq 0 ]; then
-		"$PPATH/live-gateways.sh"
+		_livegateways
 	else
-		"$PPATH/live-gateways.sh" | awk "$(_genawkpgm "$@")"
+		_livegateways | awk "$(_genawkpgm "$@")"
 	fi
 }
 
@@ -397,6 +414,31 @@ function _selectgateways {
 # all polls are done.
 OUTDIR="$(mktemp -d)" || { echo "$PNAME: can't create temp dir" 1>&2 ; exit 1 ; }
 trap 'rm -rf "$OUTDIR"' EXIT
+
+# With -H, every ssh to the jumphost, and every poll's connection
+# through it, shares one master connection. Separate logins, 32 at
+# a time, would hit sshd's MaxStartups limit. Gateway host keys are
+# not kept, so the caller's known_hosts gets no entry per gateway.
+# Without -H, the gateways' tunnels are on this machine.
+JHSSHOPTS=()
+GWSSHOPTS=()
+GWHOST=localhost
+if [ -n "$OPTHOST" ]; then
+	JHSSHOPTS=(-o BatchMode=yes -o ConnectTimeout=20 -o ControlPath="$OUTDIR/ssh-ctl")
+	if ! ssh "${JHSSHOPTS[@]}" -o ControlMaster=yes -o ControlPersist=no \
+		-o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+		-fN "$OPTHOST" ; then
+		echo "$PNAME: can't connect to $OPTHOST" 1>&2
+		exit 1
+	fi
+	trap 'ssh "${JHSSHOPTS[@]}" -O exit "$OPTHOST" 2>/dev/null; rm -rf "$OUTDIR"' EXIT
+	printf -v PROXYCMD 'ssh -o BatchMode=yes -o ControlPath=%q -W [%%h]:%%p %q' \
+		"$OUTDIR/ssh-ctl" "$OPTHOST"
+	GWSSHOPTS=(-o ProxyCommand="$PROXYCMD" \
+		-o UserKnownHostsFile=/dev/null -o LogLevel=ERROR)
+	# the tunnel listeners are IPv6 only.
+	GWHOST=::1
+fi
 
 # On ^C or SIGTERM, send SIGTERM to the whole process group, so that
 # every poll and its ssh stop even if one ignores SIGINT. This shell

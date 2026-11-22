@@ -29,9 +29,18 @@ files in `live-gateways.sh` order after the last job ends. Anything a job
 prints, including ssh errors, goes into its file. On ^C the script sends
 SIGTERM to its process group and removes the directory.
 
+With `-H {host}`, `kick-all-gateways.sh` runs on another machine. It opens
+one ssh master connection to the jumphost (`ControlPath` in the temp
+directory), runs the local `live-gateways.sh` there with `bash -s`, and
+reaches each gateway as `root@::1` through `ssh -W` on that connection. One
+master connection keeps 32 polls from tripping sshd's `MaxStartups`. Gateway
+host keys go to `/dev/null`. The caller needs keys for both the jumphost and
+the gateways.
+
 ## How `kick-all-gateways.sh` works
 
-`_kickgateway` does all its work in one `ssh -p <port> root@localhost` call.
+`_kickgateway` does all its work in one `ssh -p <port> root@localhost` call
+(`root@::1` through the jumphost with `-H`).
 The remote command is a single-quoted shell script; the local option values
 are spliced in by closing and reopening the quotes (`'"$OPTQUERY"'`), and
 literal single quotes inside the remote script are written `'\''`. When you
