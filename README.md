@@ -41,7 +41,7 @@ Useful scripts for managing gateways configured using [conduit-mfg](https://gith
 
    The script also runs from other machines; you need ssh keys for the jumphost and for the gateways. It reaches the gateways through `jumphost.ttni.tech` unless the gateway tunnels end on the machine it runs on. `-H {host}` names another jumphost, and `-l` makes it use the tunnels on the machine it runs on.
 
-* `gateway-sessions.sh` shows when each gateway's ssh session to the jumphost opened and closed, one line per session, tab-separated: login, port, opened, closed (`up` if still open), length, remote address. Times are UTC. Arguments are awk patterns matched against the login, as for `kick-all-gateways.sh`; `-S` starts at a time, and `-r` prints the log lines themselves. Example:
+* `gateway-sessions.sh` shows when each gateway's ssh session to the jumphost opened and closed, one line per session, tab-separated: login, port, opened, closed (`up` if still open), length, remote address. Times are UTC. Arguments are awk patterns matched against the login, as for `kick-all-gateways.sh`; `-S` starts at a time, `-r` prints the log lines themselves, and `-s` prints one line per gateway instead: sessions, average length of the closed sessions, and whether it is up now (tunnel port listening) and for how long, or when it went down. Example:
    ```console
    $ ./gateway-sessions.sh /37-6e/
    ttn-ithaca-00-08-00-4a-37-6e	20015	2026-11-24T15:19:32Z	2026-11-24T16:03:40Z	44m08s	74.77.191.188
