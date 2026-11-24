@@ -74,6 +74,13 @@ and pid. An open with no close is `up` if that sshd pid still runs, else
 `lost`; a close with no open (from before the log starts) shows `?` for the
 open time. The journal and the hook can both record an event near the
 install time, so duplicate (event, login, pid, hour) lines are dropped.
+`-s` adds, per gateway, the session count, the average length of the closed
+sessions, and the state now. "Up" means the tunnel port is listening
+(`netstat -ln`, joined to `/etc/passwd` by UID as in `live-gateways.sh`),
+so gateways connected since before the log began still show; their length
+is `?`. A session that is open while the port isn't listening shows as
+`no-tunnel`. A session open across the hook's install has no close line:
+sshd reads its PAM config when the session starts.
 `_report` does the work on the jumphost, sent over ssh with `declare -f`,
 because it needs gawk's `mktime`, the jumphost's sshd pids, and the log.
 
