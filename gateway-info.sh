@@ -136,9 +136,18 @@ for pw in sorted(pwd.getpwall(), key=lambda p: p.pw_name):
 if rows:
 	rows.insert(0, ["LOGIN", "PORT", "NOW", "SOURCE", "DESCRIPTION",
 		"MLINUX", "FORWARDER"])
+	# Box-drawing borders; UTF-8 whatever the locale under ssh.
+	sys.stdout.reconfigure(encoding="utf-8")
 	w = [max(len(r[i]) for r in rows) for i in range(len(rows[0]))]
-	for r in rows:
-		print("  ".join(c.ljust(n) for c, n in zip(r, w)).rstrip())
+	def rule(left, mid, right):
+		print(left + mid.join("─" * (n + 2) for n in w) + right)
+	rule("┌", "┬", "┐")
+	for i, r in enumerate(rows):
+		print("│" + "│".join(
+			" " + c.ljust(n) + " " for c, n in zip(r, w)) + "│")
+		if i == 0:
+			rule("├", "┼", "┤")
+	rule("└", "┴", "┘")
 PY
 }
 
