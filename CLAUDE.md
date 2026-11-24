@@ -20,6 +20,10 @@ already carries `shellcheck disable` comments where a warning is intended.
   by UID. It only works on the jumphost.
 - `gateway-sessions.sh [options] [pattern ...]` prints the gateways'
   connect history from the session log (see below).
+- `gateway-info.sh [options] [pattern ...]` describes gateways, connected or
+  not, from the records in their jumphost home directories;
+  `seed-gateway-state.sh -o org-dir` writes those records from an org
+  inventory (see below).
 - `kick-all-gateways.sh [options] [pattern ...]` calls `live-gateways.sh`,
   filters logins through the awk patterns given as arguments (none means all
   gateways), and runs `_kickgateway` on each one. `-h` prints the option list.
@@ -87,6 +91,39 @@ because it needs gawk's `mktime`, the jumphost's sshd pids, and the log.
 The journal on the jumphost keeps sshd lines for only about two days:
 journald keeps a separate 8 MB `user-<uid>.journal` for each gateway login,
 and those fill its size limit.
+
+## Gateway records
+
+Each gateway login's home directory on the jumphost holds
+`gateway_state.json`, a record of the gateway. `"source": "inventory"`
+records come from `seed-gateway-state.sh`; a planned change to
+ttn-multitech-cm will have gateways push `"source": "gateway"` records of
+their own over their tunnel login, replacing the seeded one by `mv` (the
+gateway owns the directory, so it can replace a file root owns).
+
+`seed-gateway-state.sh` runs `ansible/seed.yml` through ttn-multitech-cm's
+`bin/run`, which mounts `$PWD`, `$HOME` and `TTN_ORG`, so the play must be
+under `$HOME`. The container has no git, so the script runs `git describe`
+on the org repo itself and passes it in as `seed_config_version`. The play
+adds the jumphost with `add_host` (port 22, the caller's `$USER`, no
+`ProxyCommand`), rather than delegating from each gateway, because the
+gateways' connection variables (`ansible_port`, `ansible_ssh_common_args`)
+would otherwise apply to the jumphost. It never connects to a gateway. It
+skips gateways whose `ssh_tunnel_remote_host` is another jumphost, logins
+that don't end in a MAC address (old groups share the login `ttn`), and
+logins missing from the jumphost's `/etc/passwd`, so it never creates a home
+directory. Records are written with `force: false` unless `-f`.
+
+Home directories become group `wheel`, mode 2750 (setgid, so files a
+gateway writes later get group `wheel`); records are root-owned, 0640.
+sshd's `StrictModes` accepts a home directory that isn't group-writable.
+`.ssh` keeps its own mode and group.
+
+`gateway-info.sh` runs a Python 3 `_report` on the jumphost (sent with
+`declare -f`, as in `gateway-sessions.sh`). It selects logins the same way as
+`gw-session-log`, reads each record it can (records it can't read count as
+missing), and adds `now` (tunnel port listening) and `last_close` (from the
+session log).
 
 ## How `kick-all-gateways.sh` works
 

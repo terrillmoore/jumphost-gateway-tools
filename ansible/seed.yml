@@ -1,0 +1,106 @@
+---
+#
+# Name: seed.yml
+#
+# Function:
+#	Write a record for each gateway in an org inventory to
+#	~<login>/gateway_state.json on the jumphost, unless the gateway
+#	already has one. Gateways that are offline now get a record too,
+#	because the play never connects to them.
+#
+# Use:
+#	Run through seed-gateway-state.sh, which runs this play in
+#	ttn-multitech-cm's container (bin/run) against the org inventory.
+#
+# Variables (-e):
+#	seed_jumphost	the jumphost (default jumphost.ttni.tech). Only
+#			gateways whose ssh_tunnel_remote_host is this
+#			host are seeded.
+#	seed_user	login on the jumphost (default: $USER).
+#	seed_patterns	list of regular expressions matched against
+#			inventory names; empty means all gateways.
+#	seed_force	true to replace records that exist, pushed
+#			ones included.
+#	seed_group	group that may read the records (default wheel).
+#	seed_config_version
+#			git describe of the org repo. The container has no
+#			git, so seed-gateway-state.sh finds it on the host.
+#
+
+- name: Add the jumphost
+  hosts: localhost
+  gather_facts: false
+  vars:
+    seed_jumphost: jumphost.ttni.tech
+    seed_user: "{{ lookup('env', 'USER') }}"
+  tasks:
+    - name: Add the jumphost to the inventory
+      ansible.builtin.add_host:
+        name: seed_jumphost
+        ansible_host: "{{ seed_jumphost }}"
+        ansible_user: "{{ seed_user }}"
+        ansible_port: 22
+        ansible_ssh_common_args: ""
+        ansible_python_interpreter: /usr/bin/python3
+        jumphost_name: "{{ seed_jumphost }}"
+
+- name: Seed gateway records on the jumphost
+  hosts: seed_jumphost
+  gather_facts: false
+  strategy: linear
+  become: true
+  vars:
+    seed_patterns: []
+    seed_force: false
+    seed_group: wheel
+    seed_org: "{{ lookup('env', 'TTN_ORG') | realpath | basename }}"
+    seed_time: "{{ now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ') }}"
+    seed_config_version: unknown
+    # Gateways in the inventory that use this jumphost and match a
+    # pattern.
+    seed_gateways: >-
+      {{ groups['conduits']
+         | map('extract', hostvars)
+         | selectattr('ssh_tunnel_remote_host', 'defined')
+         | selectattr('ssh_tunnel_remote_host', 'equalto', jumphost_name)
+         | map(attribute='inventory_hostname')
+         | select('match', '.*(' ~ (seed_patterns | join('|') or '.*') ~ ')')
+         | list }}
+    # A gateway login ends in the gateway's MAC address, as in
+    # gw-session-log. Some old groups share one login ("ttn"), which
+    # can't hold one gateway's record.
+    seed_login_re: '.*-([0-9a-f]{2}-){5}[0-9a-f]{2}$|.*-[0-9a-f]{12}$'
+  tasks:
+    - name: Read the jumphost's logins
+      ansible.builtin.getent:
+        database: passwd
+
+    - name: Let the seed group read each gateway's home directory
+      ansible.builtin.file:
+        path: "~{{ hostvars[item].ssh_tunnel_gateway_user_on_jumphost }}"
+        state: directory
+        group: "{{ seed_group }}"
+        mode: "2750"
+      loop: "{{ seed_gateways }}"
+      loop_control:
+        label: "{{ item }}"
+      when:
+        - hostvars[item].ssh_tunnel_gateway_user_on_jumphost is match(seed_login_re)
+        - hostvars[item].ssh_tunnel_gateway_user_on_jumphost in getent_passwd
+
+    - name: Write the gateway record if there is none
+      ansible.builtin.template:
+        src: gateway_state.json.j2
+        dest: "~{{ hostvars[item].ssh_tunnel_gateway_user_on_jumphost }}/gateway_state.json"
+        owner: root
+        group: "{{ seed_group }}"
+        mode: "0640"
+        force: "{{ seed_force | bool }}"
+      vars:
+        gw: "{{ hostvars[item] }}"
+      loop: "{{ seed_gateways }}"
+      loop_control:
+        label: "{{ item }}"
+      when:
+        - hostvars[item].ssh_tunnel_gateway_user_on_jumphost is match(seed_login_re)
+        - hostvars[item].ssh_tunnel_gateway_user_on_jumphost in getent_passwd
