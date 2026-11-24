@@ -85,8 +85,12 @@ so gateways connected since before the log began still show; their length
 is `?`. A session that is open while the port isn't listening shows as
 `no-tunnel`. A session open across the hook's install has no close line:
 sshd reads its PAM config when the session starts.
-`_report` does the work on the jumphost, sent over ssh with `declare -f`,
-because it needs gawk's `mktime`, the jumphost's sshd pids, and the log.
+Each output line adds mLinux version, forwarder, link and (`-L`) description
+from the gateway's record (see Gateway records); these are what the record
+says, which for a seeded record is the inventory, not what the gateway runs.
+`-f`, `-L` and `-o json` follow `kick-all-gateways.sh`. `_report` is Python 3,
+run on the jumphost (sent over ssh with `declare -f`), because it needs the
+log, the jumphost's sshd pids and listening ports, and the records.
 
 The journal on the jumphost keeps sshd lines for only about two days:
 journald keeps a separate 8 MB `user-<uid>.journal` for each gateway login,
