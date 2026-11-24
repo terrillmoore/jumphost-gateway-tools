@@ -129,6 +129,12 @@ sshd's `StrictModes` accepts a home directory that isn't group-writable.
 missing), and adds `now` (tunnel port listening) and `last_close` (from the
 session log).
 
+Both `gateway-info.sh` and `gateway-sessions.sh` print a table when their
+output is a terminal. The shell wrapper decides, with `[[ -t 1 ]]`, because
+`_report` runs under ssh with no terminal: it passes an empty separator for a
+table, and `_report` then keeps the rows and pads the columns at the end.
+`-f`, or output to a pipe, gives separated lines.
+
 ## How `kick-all-gateways.sh` works
 
 `_kickgateway` does all its work in one `ssh -p <port> root@localhost` call

@@ -37,8 +37,7 @@ Operation:
 	kick-all-gateways.sh (18-c6 selects ttn-nyc-00-08-00-4a-18-c6);
 	with none, all gateways are shown.
 
-	Output is one line per session, fields joined by the -f separator:
-	login, port, opened, closed, length, remote address, then from the
+	Output is one line per session: login, port, opened, closed, length, remote address, then from the
 	record: mLinux version, forwarder, link (ethernet or cellular), and
 	with -L the description. Times are UTC. "up" in the closed column
 	means the session is still open; "lost" means the log has no close
@@ -55,10 +54,14 @@ Operation:
 	also shows gateways that have been connected since before the log
 	starts.
 
-	A field with no value prints as "-".
+	On a terminal the output is a table with a header; otherwise, or
+	with -f, the fields are joined by the -f separator. A field with
+	no value prints as "-".
 
 Options:
-	-f sep	separator between fields, default ': '.
+	-f sep	print separated lines, not a table, with this separator
+		between fields (default ': ' when output is not a
+		terminal).
 	-H host	read the log on this jumphost (default $DEFAULTJUMPHOST,
 		or this machine if it has the log).
 	-l	read the log on this machine.
@@ -77,8 +80,8 @@ Options:
 }
 
 # Runs on the machine that has the log. Arguments: mode (sessions, raw
-# or summary), since, separator, description (0/1), format (text or
-# json), then the patterns.
+# or summary), since, separator (empty for a table), description (0/1),
+# format (text or json), then the patterns.
 function _report {
 	if [[ ! -r /var/log/gateway-sessions.log ]]; then
 		echo "$(hostname): no /var/log/gateway-sessions.log;" \
@@ -144,15 +147,33 @@ def info(login):
 		}
 	return records[login]
 
+rows = []
 def emit_line(fields, tail):
-	"""Print fields, then the record's fields, then tail."""
+	"""Print fields, then the record's fields, then tail; or keep them
+	for the table."""
 	i = info(fields[0])
 	out = list(fields) + [i["mlinux_version"], i["forwarder_variant"],
 		i["link"]]
 	if show_desc:
 		out.append(i["description"])
 	out += tail
-	print(sep.join("-" if x is None else str(x) for x in out))
+	out = ["-" if x is None else str(x) for x in out]
+	if sep:
+		print(sep.join(out))
+	else:
+		rows.append(out)
+
+def print_table(head, tail):
+	"""Print the kept rows as a table under a header."""
+	if not rows:
+		return
+	head = head + ["MLINUX", "FORWARDER", "LINK"]
+	if show_desc:
+		head.append("DESCRIPTION")
+	rows.insert(0, head + tail)
+	w = [max(len(r[i]) for r in rows) for i in range(len(rows[0]))]
+	for r in rows:
+		print("  ".join(c.ljust(n) for c, n in zip(r, w)).rstrip())
 
 def emit_json(obj):
 	obj.update(info(obj["login"]))
@@ -242,6 +263,8 @@ if mode == "sessions":
 			emit_line((login, port, op, cl,
 				length(dur) if dur is not None else
 				"?" if op == "?" else None, addr), [])
+	print_table(["LOGIN", "PORT", "OPENED", "CLOSED", "LENGTH",
+		"ADDRESS"], [])
 	sys.exit(0)
 
 # Summary: one line per gateway.
@@ -288,11 +311,12 @@ for login in sorted(gw):
 	else:
 		emit_line((login, g["port"], g["n"],
 			length(avg) if avg is not None else None), [text])
+print_table(["LOGIN", "PORT", "SESSIONS", "AVERAGE"], ["NOW"])
 PY
 }
 
 MODE=sessions
-OPTSEP=": "
+OPTSEP=
 FORMAT=text
 typeset -i OPTDESC=0
 typeset -i OPTLOCAL=0
@@ -317,6 +341,12 @@ while getopts f:hlLrsH:o:S: opt; do
 	esac
 done
 shift $((OPTIND - 1))
+
+# A table only on a terminal; the jumphost can't tell, since ssh runs
+# _report without one.
+if [[ -z "$OPTSEP" && ! -t 1 ]]; then
+	OPTSEP=": "
+fi
 
 if [[ $OPTLOCAL -eq 0 && -z "$JUMPHOST" ]]; then
 	if [[ -r "$LOGDIR/$LOGNAME" ]]; then
