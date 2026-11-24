@@ -173,9 +173,18 @@ def print_table(head, tail):
 	if show_desc:
 		head.append("DESCRIPTION")
 	rows.insert(0, head + tail)
+	# Box-drawing borders; UTF-8 whatever the locale under ssh.
+	sys.stdout.reconfigure(encoding="utf-8")
 	w = [max(len(r[i]) for r in rows) for i in range(len(rows[0]))]
-	for r in rows:
-		print("  ".join(c.ljust(n) for c, n in zip(r, w)).rstrip())
+	def rule(left, mid, right):
+		print(left + mid.join("─" * (n + 2) for n in w) + right)
+	rule("┌", "┬", "┐")
+	for i, r in enumerate(rows):
+		print("│" + "│".join(
+			" " + c.ljust(n) + " " for c, n in zip(r, w)) + "│")
+		if i == 0:
+			rule("├", "┼", "┤")
+	rule("└", "┴", "┘")
 
 def emit_json(obj):
 	obj.update(info(obj["login"]))

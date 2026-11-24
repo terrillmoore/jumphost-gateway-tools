@@ -132,7 +132,9 @@ session log).
 Both `gateway-info.sh` and `gateway-sessions.sh` print a table when their
 output is a terminal. The shell wrapper decides, with `[[ -t 1 ]]`, because
 `_report` runs under ssh with no terminal: it passes an empty separator for a
-table, and `_report` then keeps the rows and pads the columns at the end.
+table, and `_report` then keeps the rows and prints them at the end, padded
+and boxed with Unicode box-drawing characters (stdout set to UTF-8, since the
+locale under ssh may be C).
 `-f`, or output to a pipe, gives separated lines.
 
 ## How `kick-all-gateways.sh` works
