@@ -134,7 +134,7 @@ for pw in sorted(pwd.getpwall(), key=lambda p: p.pw_name):
 		rows.append(row)
 
 if rows:
-	rows.insert(0, ["LOGIN", "PORT", "NOW", "SOURCE", "DESCRIPTION",
+	rows.insert(0, ["ID", "PORT", "NOW", "SOURCE", "DESCRIPTION",
 		"MLINUX", "FORWARDER"])
 	# Box-drawing borders; UTF-8 whatever the locale under ssh.
 	sys.stdout.reconfigure(encoding="utf-8")

@@ -45,7 +45,7 @@ Useful scripts for managing gateways configured using [conduit-mfg](https://gith
    ```console
    $ ./gateway-sessions.sh -s -L 37-6e
    ┌──────────────────────────────┬───────┬──────────┬─────────┬────────┬───────────┬──────────┬──────────────────────────────────────┬───────────┐
-   │ LOGIN                        │ PORT  │ SESSIONS │ AVERAGE │ MLINUX │ FORWARDER │ LINK     │ DESCRIPTION                          │ NOW       │
+   │ ID                           │ PORT  │ SESSIONS │ AVERAGE │ MLINUX │ FORWARDER │ LINK     │ DESCRIPTION                          │ NOW       │
    ├──────────────────────────────┼───────┼──────────┼─────────┼────────┼───────────┼──────────┼──────────────────────────────────────┼───────────┤
    │ ttn-ithaca-00-08-00-4a-37-6e │ 20015 │ 110      │ 15m19s  │ 5.3.31 │ basic     │ ethernet │ Tompkins County #5 (Coddington Road) │ up 18m26s │
    └──────────────────────────────┴───────┴──────────┴─────────┴────────┴───────────┴──────────┴──────────────────────────────────────┴───────────┘
@@ -62,7 +62,7 @@ Useful scripts for managing gateways configured using [conduit-mfg](https://gith
    ```console
    $ ./gateway-info.sh 37-6e
    ┌──────────────────────────────┬───────┬─────┬───────────┬──────────────────────────────────────┬────────┬───────────┐
-   │ LOGIN                        │ PORT  │ NOW │ SOURCE    │ DESCRIPTION                          │ MLINUX │ FORWARDER │
+   │ ID                           │ PORT  │ NOW │ SOURCE    │ DESCRIPTION                          │ MLINUX │ FORWARDER │
    ├──────────────────────────────┼───────┼─────┼───────────┼──────────────────────────────────────┼────────┼───────────┤
    │ ttn-ithaca-00-08-00-4a-37-6e │ 20015 │ up  │ inventory │ Tompkins County #5 (Coddington Road) │ 5.3.31 │ basic     │
    └──────────────────────────────┴───────┴─────┴───────────┴──────────────────────────────────────┴────────┴───────────┘
