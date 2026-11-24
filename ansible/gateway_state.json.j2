@@ -1,0 +1,17 @@
+{{ {
+  "source": "inventory",
+  "time": seed_time,
+  "org": seed_org,
+  "config_version": seed_config_version,
+  "login": gw.ssh_tunnel_gateway_user_on_jumphost,
+  "port": gw.ssh_tunnel_remote_port | default(none),
+  "hostname": gw.inventory_hostname,
+  "groups": gw.group_names,
+  "description": gw.description | default(none),
+  "latitude": gw.latitude | default(none),
+  "longitude": gw.longitude | default(none),
+  "altitude": gw.altitude | default(none),
+  "mlinux_version": gw.mlinux_version | default(none),
+  "forwarder_variant": gw.forwarder_variant | default(none),
+  "use_cellular": gw.use_cellular | default(false)
+} | to_nice_json(indent=2) }}
