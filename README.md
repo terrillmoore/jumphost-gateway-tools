@@ -41,10 +41,11 @@ Useful scripts for managing gateways configured using [conduit-mfg](https://gith
 
    The script also runs from other machines; you need ssh keys for the jumphost and for the gateways. It reaches the gateways through `jumphost.ttni.tech` unless the gateway tunnels end on the machine it runs on. `-H {host}` names another jumphost, and `-l` makes it use the tunnels on the machine it runs on.
 
-* `gateway-sessions.sh` shows when each gateway's ssh session to the jumphost opened and closed, one line per session: login, port, opened, closed (`up` if still open), length, remote address, then mLinux version, forwarder and link from the gateway's record (see `gateway-info.sh`), with `-L` the description. Times are UTC. As in `kick-all-gateways.sh`, fields are joined by `-f` (default `': '`), `-o json` prints one JSON object per line, and arguments are regular expressions matched against the login (`18-c6` selects `ttn-nyc-00-08-00-4a-18-c6`). `-S` starts at a time, `-r` prints the log lines themselves, and `-s` prints one line per gateway instead: sessions, average length of the closed sessions, the record's fields, and last whether it is up now (tunnel port listening) and for how long, or when it went down. Example:
+* `gateway-sessions.sh` shows when each gateway's ssh session to the jumphost opened and closed, one line per session: login, port, opened, closed (`up` if still open), length, remote address, then mLinux version, forwarder and link from the gateway's record (see `gateway-info.sh`), with `-L` the description. Times are UTC. On a terminal it prints a table with a header; in a pipe, or with `-f`, it joins the fields with the `-f` separator (default `': '`), as `kick-all-gateways.sh` does. `-o json` prints one JSON object per line, and arguments are regular expressions matched against the login (`18-c6` selects `ttn-nyc-00-08-00-4a-18-c6`). `-S` starts at a time, `-r` prints the log lines themselves, and `-s` prints one line per gateway instead: sessions, average length of the closed sessions, the record's fields, and last whether it is up now (tunnel port listening) and for how long, or when it went down. Example:
    ```console
    $ ./gateway-sessions.sh -s -L 37-6e
-   ttn-ithaca-00-08-00-4a-37-6e: 20015: 98: 15m23s: 5.3.31: basic: ethernet: Tompkins County #5 (Coddington Road): up 9m15s
+   LOGIN                         PORT   SESSIONS  AVERAGE  MLINUX  FORWARDER  LINK      DESCRIPTION                           NOW
+   ttn-ithaca-00-08-00-4a-37-6e  20015  110       15m19s   5.3.31  basic      ethernet  Tompkins County #5 (Coddington Road)  up 13m52s
    ```
    Like `kick-all-gateways.sh`, it runs on the jumphost or reaches `jumphost.ttni.tech` with ssh (`-H`, `-l`).
 
@@ -54,10 +55,11 @@ Useful scripts for managing gateways configured using [conduit-mfg](https://gith
    ```
    This installs the hook in `/usr/local/sbin`, adds it to `/etc/pam.d/sshd` (saving a copy of the old file), sets up monthly rotation in `/etc/logrotate.d/gateway-sessions`, and loads the sessions still in the journal (about two days) into the log.
 
-* `gateway-info.sh` describes each gateway known to the jumphost, connected or not: login, port, up or down (and since when), where its record came from, description, mLinux version and forwarder. Patterns select gateways as for `kick-all-gateways.sh`; `-o json` prints the whole record. Example:
+* `gateway-info.sh` describes each gateway known to the jumphost, connected or not: login, port, up or down (and since when), where its record came from, description, mLinux version and forwarder. Patterns select gateways as for `kick-all-gateways.sh`; `-u` shows only the gateways that are up, `-d` only those that are down. On a terminal it prints a table with a header; in a pipe, or with `-f`, it prints the fields separated by tabs (or the `-f` separator). `-o json` prints the whole record. Example:
    ```console
    $ ./gateway-info.sh 37-6e
-   ttn-ithaca-00-08-00-4a-37-6e	20015	up	inventory	Tompkins County #5 (Coddington Road)	5.3.31	basic
+   LOGIN                         PORT   NOW  SOURCE     DESCRIPTION                           MLINUX  FORWARDER
+   ttn-ithaca-00-08-00-4a-37-6e  20015  up   inventory  Tompkins County #5 (Coddington Road)  5.3.31  basic
    ```
    It reads `~<login>/gateway_state.json` on the jumphost, which `seed-gateway-state.sh` writes from an org inventory:
    ```console
