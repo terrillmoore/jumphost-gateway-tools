@@ -30,8 +30,10 @@ Usage:
 
 Operation:
 	Reads $LOGDIR/$LOGNAME and its rotated copies on the jumphost.
-	The arguments after the options are awk patterns, matched
-	against gateway login names; with none, all gateways are shown.
+	The arguments after the options are regular expressions, matched
+	against gateway login names as in kick-all-gateways.sh (18-c6
+	selects ttn-nyc-00-08-00-4a-18-c6); with none, all gateways are
+	shown.
 
 	Output is one line per session, tab-separated: login, port,
 	opened, closed, length, remote address. Times are UTC. "up" in
@@ -65,11 +67,13 @@ Options:
 function _report {
 	local mode="$1" since="$2"
 	shift 2
-	# Each pattern is awk source, tested with the login as \$0.
+	# Each pattern is a regular expression matched against the login,
+	# as in kick-all-gateways.sh: 18-c6 means \$0 ~ /18-c6/.
 	local pats=""
 	local p
 	for p in "$@"; do
-		pats+="${pats:+ || }($p)"
+		p="${p//\//\\/}"
+		pats+="${pats:+ || }(\$0 ~ /$p/)"
 	done
 	pats="${pats:-1}"
 
