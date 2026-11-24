@@ -277,7 +277,7 @@ if mode == "sessions":
 			emit_line((login, port, op, cl,
 				length(dur) if dur is not None else
 				"?" if op == "?" else None, addr), [])
-	print_table(["LOGIN", "PORT", "OPENED", "CLOSED", "LENGTH",
+	print_table(["ID", "PORT", "OPENED", "CLOSED", "LENGTH",
 		"ADDRESS"], [])
 	sys.exit(0)
 
@@ -325,7 +325,7 @@ for login in sorted(gw):
 	else:
 		emit_line((login, g["port"], g["n"],
 			length(avg) if avg is not None else None), [text])
-print_table(["LOGIN", "PORT", "SESSIONS", "AVERAGE"], ["NOW"])
+print_table(["ID", "PORT", "SESSIONS", "AVERAGE"], ["NOW"])
 PY
 }
 
