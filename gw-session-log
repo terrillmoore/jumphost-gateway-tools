@@ -1,0 +1,61 @@
+#!/bin/sh
+
+#
+# Name: gw-session-log
+#
+# Function:
+#	pam_exec hook for sshd on the jumphost. Appends one line to
+#	/var/log/gateway-sessions.log each time a gateway's ssh session
+#	opens or closes.
+#
+# Installation:
+#	install-session-log.sh copies this to /usr/local/sbin and adds
+#	to /etc/pam.d/sshd:
+#
+#	session optional pam_exec.so quiet /usr/local/sbin/gw-session-log
+#
+# Output:
+#	Tab-separated: time (UTC), open or close, login, UID (which is
+#	the gateway's tunnel port), remote address, pid of the sshd
+#	process that owns the session. The pid matches the sshd[pid] in
+#	the journal, and pairs an open with its close.
+#
+# Notes:
+#	Only gateway logins are logged: UID 20000-29999 and a name that
+#	ends in the gateway's MAC address, as -xx-xx-xx-xx-xx-xx or as 12
+#	hex digits. Some people's logins also have UIDs in that range.
+#	The script must not fail the login, so it always exits 0.
+#
+
+LOG=/var/log/gateway-sessions.log
+
+case "$PAM_TYPE" in
+open_session)	EVENT=open ;;
+close_session)	EVENT=close ;;
+*)		exit 0 ;;
+esac
+
+GWUID="$(id -u -- "$PAM_USER" 2>/dev/null)" || exit 0
+case "$GWUID" in
+2[0-9][0-9][0-9][0-9])	;;
+*)			exit 0 ;;
+esac
+
+H='[0-9a-f]'
+# shellcheck disable=2254 # the patterns are meant to expand.
+case "$PAM_USER" in
+*-$H$H-$H$H-$H$H-$H$H-$H$H-$H$H)	;;
+*-$H$H$H$H$H$H$H$H$H$H$H$H)		;;
+*)					exit 0 ;;
+esac
+
+# The lock keeps lines whole while install-session-log.sh rewrites the
+# file; it waits at most 5 seconds, then writes anyway.
+{
+	flock -w 5 9
+	printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+		"$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$EVENT" "$PAM_USER" \
+		"$GWUID" "${PAM_RHOST:--}" "$PPID" 1>&9
+} 9>>"$LOG" 2>/dev/null
+
+exit 0

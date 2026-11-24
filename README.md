@@ -40,3 +40,17 @@ Useful scripts for managing gateways configured using [conduit-mfg](https://gith
    **Note:** it is a good idea to make sure that nobody is working on the packet forwarder locally when running this script, as they may have intentionally stopped the packet forwarder.
 
    The script also runs from other machines; you need ssh keys for the jumphost and for the gateways. It reaches the gateways through `jumphost.ttni.tech` unless the gateway tunnels end on the machine it runs on. `-H {host}` names another jumphost, and `-l` makes it use the tunnels on the machine it runs on.
+
+* `gateway-sessions.sh` shows when each gateway's ssh session to the jumphost opened and closed, one line per session, tab-separated: login, port, opened, closed (`up` if still open), length, remote address. Times are UTC. Arguments are awk patterns matched against the login, as for `kick-all-gateways.sh`; `-S` starts at a time, and `-r` prints the log lines themselves. Example:
+   ```console
+   $ ./gateway-sessions.sh /37-6e/
+   ttn-ithaca-00-08-00-4a-37-6e	20015	2026-11-24T15:19:32Z	2026-11-24T16:03:40Z	44m08s	74.77.191.188
+   ttn-ithaca-00-08-00-4a-37-6e	20015	2026-11-24T16:04:58Z	2026-11-24T16:49:10Z	44m12s	74.77.191.188
+   ```
+   Like `kick-all-gateways.sh`, it runs on the jumphost or reaches `jumphost.ttni.tech` with ssh (`-H`, `-l`).
+
+   It reads `/var/log/gateway-sessions.log` (and its monthly `.gz` copies, kept for 3 years), which a PAM hook, `gw-session-log`, writes each time a gateway's session opens or closes. Set it up once, as root on the jumphost:
+   ```console
+   $ sudo ./install-session-log.sh
+   ```
+   This installs the hook in `/usr/local/sbin`, adds it to `/etc/pam.d/sshd` (saving a copy of the old file), sets up monthly rotation in `/etc/logrotate.d/gateway-sessions`, and loads the sessions still in the journal (about two days) into the log.

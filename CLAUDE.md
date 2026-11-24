@@ -18,6 +18,8 @@ already carries `shellcheck disable` comments where a warning is intended.
 - `live-gateways.sh` lists connected gateways as `login<TAB>port`. It reads
   listening ports from `netstat -ln`, then joins them against `/etc/passwd`
   by UID. It only works on the jumphost.
+- `gateway-sessions.sh [options] [pattern ...]` prints the gateways'
+  connect history from the session log (see below).
 - `kick-all-gateways.sh [options] [pattern ...]` calls `live-gateways.sh`,
   filters logins through the awk patterns given as arguments (none means all
   gateways), and runs `_kickgateway` on each one. `-h` prints the option list.
@@ -46,6 +48,38 @@ reaches each gateway as `root@::1` through `ssh -W` on that connection. One
 master connection keeps 32 polls from tripping sshd's `MaxStartups`. Gateway
 host keys go to `/dev/null`. The caller needs keys for both the jumphost and
 the gateways.
+
+## Gateway session log
+
+`gw-session-log` is a `pam_exec` hook (`session optional pam_exec.so quiet
+/usr/local/sbin/gw-session-log` in `/etc/pam.d/sshd`). On each
+`open_session` and `close_session` for a gateway login it appends a
+tab-separated line to `/var/log/gateway-sessions.log`: UTC time, `open` or
+`close`, login, UID (the tunnel port), `PAM_RHOST`, and its parent's pid,
+which is the sshd process that owns the session and appears as `sshd[pid]`
+in the journal. A gateway login has a UID of 20000-29999 and a name ending
+in its MAC address (`-xx-xx-xx-xx-xx-xx` or 12 hex digits); some people's
+logins also have UIDs in that range. The hook runs as root inside sshd, so
+it must stay quick and always exit 0. It runs under `/bin/sh`.
+
+`install-session-log.sh` (run as root on the jumphost) installs the hook,
+the log, a logrotate file (monthly, 36 copies, `-YYYYMM.gz`) and the PAM
+line. On the run that adds the PAM line it also turns the journal's sshd
+lines up to that moment into log lines, using the same tests, and puts them
+at the front of the log. It rewrites the log in place under `flock`, which
+the hook also takes, so no line is lost meanwhile.
+
+`gateway-sessions.sh` pairs each `open` with the `close` of the same login
+and pid. An open with no close is `up` if that sshd pid still runs, else
+`lost`; a close with no open (from before the log starts) shows `?` for the
+open time. The journal and the hook can both record an event near the
+install time, so duplicate (event, login, pid, hour) lines are dropped.
+`_report` does the work on the jumphost, sent over ssh with `declare -f`,
+because it needs gawk's `mktime`, the jumphost's sshd pids, and the log.
+
+The journal on the jumphost keeps sshd lines for only about two days:
+journald keeps a separate 8 MB `user-<uid>.journal` for each gateway login,
+and those fill its size limit.
 
 ## How `kick-all-gateways.sh` works
 
