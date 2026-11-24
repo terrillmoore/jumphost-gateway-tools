@@ -74,7 +74,9 @@ Options:
 	-s	print a summary for each gateway, not sessions.
 	-S since
 		start at this time: any prefix of 2026-11-24T16:49:10Z,
-		for example 2026-11 or 2026-11-24T16.
+		for example 2026-11 or 2026-11-24T16. Shows sessions
+		that closed at or after it, lost sessions that opened at
+		or after it, and sessions still open.
 	-h	print this help.
 .
 }
@@ -223,6 +225,9 @@ def finish(k, closed):
 			return
 		dur = secs(closed) - secs(f[0])
 	else:
+		# A lost session has no close time; go by when it opened.
+		if f[0] < since:
+			return
 		dur = None
 	sessions.append((f[2], int(f[3]), f[0], closed, dur, f[4]))
 
