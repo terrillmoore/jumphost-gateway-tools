@@ -141,13 +141,15 @@ function _report {
 		if (k in open)
 			emit(k, $1)
 		else if ($1 >= since)
-			out($3, $4, "?", $1, "?", $5)
+			out($3, $4, "?", $1, -1, $5)
 		next
 	}
-	# One session: print it, or add it to the summary.
+	# One session: print it, or add it to the summary. dur is the
+	# length in seconds, or -1 if unknown (no open, or no close).
 	function out(login, uid, opened, closed, dur, rhost) {
 		if (mode != "summary") {
-			print login, uid, opened, closed, (dur < 0 ? "-" : len(dur)), rhost
+			print login, uid, opened, closed,
+				(dur >= 0 ? len(dur) : opened == "?" ? "?" : "-"), rhost
 			return
 		}
 		gwuid[login] = uid
