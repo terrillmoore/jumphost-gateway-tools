@@ -3,7 +3,8 @@
 # Name: seed.yml
 #
 # Function:
-#	Write a record for each gateway in an org inventory to
+#	Write a record for each gateway in an org inventory (groups
+#	conduits and, if present, unprovisioned) to
 #	~<login>/gateway_state.json on the jumphost, unless the gateway
 #	already has one. Gateways that are offline now get a record too,
 #	because the play never connects to them.
@@ -59,7 +60,7 @@
     # Gateways in the inventory that use this jumphost and match a
     # pattern.
     seed_gateways: >-
-      {{ groups['conduits']
+      {{ (groups['conduits'] + groups.get('unprovisioned', []))
          | map('extract', hostvars)
          | selectattr('ssh_tunnel_remote_host', 'defined')
          | selectattr('ssh_tunnel_remote_host', 'equalto', jumphost_name)
